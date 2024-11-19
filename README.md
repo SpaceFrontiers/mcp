@@ -1,0 +1,54 @@
+# Space Frontiers MCP Server
+
+## General Overview
+
+This project implements a Model Context Protocol (MCP) server that acts as an interface to the Space Frontiers API. It allows language models to interact with Space Frontiers data sources through defined tools. The server is built using FastAPI and the FastMCP library.
+
+**Note:** Space Frontiers provides a publicly hosted MCP server at `https://mcp.spacefrontiers.org`. To use it, obtain an API key from [https://spacefrontiers.org/developers/keys](https://spacefrontiers.org/developers/keys) and include it in your requests using the `Authorization: Bearer <your_api_key>` header.
+
+## Tools
+
+The server exposes the following tools for interaction:
+
+### `simple_search`
+
+Performs a keyword search over specified Space Frontiers databases (library, telegram, or reddit).
+
+**Parameters:**
+
+*   `source` (SourceName): The data source to search (e.g., "library", "telegram", "reddit").
+*   `query` (str): The keyword search query.
+*   `limit` (int): The maximum number of results to return.
+*   `offset` (int): The starting offset for the results.
+
+**Returns:** (str) Search results.
+
+### `search`
+
+Performs a semantic search over specified Space Frontiers databases (library, telegram, or reddit).
+
+**Parameters:**
+
+*   `query` (str): The semantic search query.
+*   `sources` (list[SourceName], optional): A list of data sources to search. Defaults to `["library"]`.
+*   `filters` (FiltersType | None, optional): Optional filters to apply to the search. Defaults to `None`.
+*   `limit` (int, optional): The maximum number of results to return. Defaults to `10`.
+
+**Returns:** (str) Search results.
+
+## Environment Variables
+
+The server utilizes the following environment variables:
+
+*   `SPACE_FRONTIERS_API_ENDPOINT`: The base URL for the Space Frontiers API.
+    *   **Default:** `https://api.spacefrontiers.org`
+*   `SPACE_FRONTIERS_API_KEY`: An optional API key for authenticating requests to the Space Frontiers API.
+    *   **Note:** Authentication can also be provided via request headers:
+        *   `Authorization: Bearer <your_api_key>`
+        *   `X-Api-Key: <your_api_key>`
+        *   Alternatively, a user ID can be provided via the `X-User-Id` header. If none of these are provided, the server will attempt to use the `SPACE_FRONTIERS_API_KEY` environment variable if set.
+        *   **Note on `X-User-Id`:** This header is intended for Space Frontiers internal usage only and cannot be exploited for external authentication.
+
+## Running the Server
+
+_(Instructions on how to run the server, e.g., using Docker or `uvicorn`, can be added here)_ 
