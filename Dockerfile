@@ -19,4 +19,4 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Command to run the application using uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "web:app", "--host", "0.0.0.0", "--port", "80"]
