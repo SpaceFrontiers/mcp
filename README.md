@@ -59,4 +59,34 @@ uv run mcp run main.py
 
 Make sure to set the `SPACE_FRONTIERS_API_KEY` environment variable before running the server.
 
+### Example Claude Desktop App Configuration (`claude_desktop_config.json`)
+
+Here's an example configuration for integrating the Space Frontiers MCP server with the Claude Desktop app:
+
+```json
+{
+  "mcpServers": {
+    "Space Frontiers MCP server": {
+      "command": "/path/to/your/uv", // Replace with the actual path to your uv installation
+      "args": [
+        "run",
+        "--with",
+        "izihawa-loglib",
+        "--with",
+        "mcp[cli]",
+        "--with",
+        "spacefrontiers-clients",
+        "mcp",
+        "run",
+        "/path/to/your/spacefrontiers-mcp/mcp_server.py" // Replace with the actual path to mcp_server.py
+      ],
+      "env": {
+        "SPACE_FRONTIERS_API_KEY": "YOUR_API_KEY_HERE" // Replace with your actual API key
+      }
+    }
+  }
+}
+```
+**Note:** Replace the placeholder paths and API key with your actual values.
+
 _(Instructions on how to run the server, e.g., using Docker or `uvicorn`, can be added here)_ 
