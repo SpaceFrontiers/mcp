@@ -38,17 +38,20 @@ mcp = FastMCP(
 )
 
 
-def process_authorization_headers(ctx: Context) -> tuple[str | None, str | None]:
+def process_authorization(ctx: Context) -> tuple[str | None, str | None]:
     api_key, user_id = None, None
-    headers = ctx.request_context.request.headers
-    if "X-User-Id" in headers:
-        user_id = headers["X-User-Id"]
-    elif "Authorization" in headers:
-        api_key = headers["Authorization"].removeprefix("Bearer").strip()
-    elif "X-Api-Key" in headers:
-        api_key = headers["X-Api-Key"]
-    elif env_api_key := os.environ.get("SPACE_FRONTIERS_API_KEY"):
-        api_key = env_api_key
+    if not ctx.request_context.request:
+        api_key = os.environ.get("SPACE_FRONTIERS_API_KEY")
+    else:
+        headers = ctx.request_context.request.headers
+        if "X-User-Id" in headers:
+            user_id = headers["X-User-Id"]
+        elif "Authorization" in headers:
+            api_key = headers["Authorization"].removeprefix("Bearer").strip()
+        elif "X-Api-Key" in headers:
+            api_key = headers["X-Api-Key"]
+        elif env_api_key := os.environ.get("SPACE_FRONTIERS_API_KEY"):
+            api_key = env_api_key
     return api_key, user_id
 
 
@@ -57,11 +60,11 @@ async def simple_search(
     ctx: Context,
     source: SourceName,
     query: str,
-    limit: int,
-    offset: int,
+    limit: int = 10,
+    offset: int = 0,
 ) -> str:
     """Keyword search over Space Frontiers databases (library, telegram or reddit)"""
-    api_key, user_id = process_authorization_headers(ctx)
+    api_key, user_id = process_authorization(ctx)
     return await ctx.request_context.lifespan_context.search_api_client.simple_search(
         SimpleSearchRequest(
             query=query,
@@ -84,7 +87,7 @@ async def search(
     limit: int = 10,
 ) -> str:
     """Semantic search over Space Frontiers databases (library, telegram or reddit)"""
-    api_key, user_id = process_authorization_headers(ctx)
+    api_key, user_id = process_authorization(ctx)
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
             query=query,
