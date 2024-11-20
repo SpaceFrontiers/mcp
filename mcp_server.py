@@ -4,10 +4,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from spacefrontiers.clients import SearchApiClient
 from spacefrontiers.clients.types import (
-    FiltersType,
     SearchRequest,
-    SimpleSearchRequest,
-    SourceName,
 )
 
 from izihawa_loglib.request_context import RequestContext
@@ -54,21 +51,17 @@ def process_authorization(ctx: Context) -> tuple[str | None, str | None]:
 
 
 @mcp.tool()
-async def simple_search(
+async def news_search(
     ctx: Context,
-    source: SourceName,
     query: str,
-    limit: int = 10,
-    offset: int = 0,
 ) -> str:
-    """Keyword search over Space Frontiers databases (library, telegram or reddit)"""
+    """Search over posts in Telegram for a given query"""
     api_key, user_id = process_authorization(ctx)
-    return await ctx.request_context.lifespan_context.search_api_client.simple_search(
-        SimpleSearchRequest(
+    return await ctx.request_context.lifespan_context.search_api_client.search(
+        SearchRequest(
             query=query,
-            source=source,
-            limit=limit,
-            offset=offset,
+            sources=["telegram"],
+            limit=70,
         ),
         api_key=api_key,
         user_id=user_id,
@@ -77,21 +70,21 @@ async def simple_search(
 
 
 @mcp.tool()
-async def search(
+async def telegram_search_in_channels(
     ctx: Context,
     query: str,
-    sources: list[SourceName] = ("library",),
-    filters: FiltersType | None = None,
-    limit: int = 10,
+    telegram_channel_names: list[str],
 ) -> str:
-    """Semantic search over Space Frontiers databases (library, telegram or reddit)"""
+    """Search in specific telegram channels"""
     api_key, user_id = process_authorization(ctx)
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
             query=query,
-            sources=sources,
-            filters=filters,
-            limit=limit,
+            sources=["telegram"],
+            filters={
+                "telegram_channel_names": telegram_channel_names,
+            },
+            limit=70,
         ),
         api_key=api_key,
         user_id=user_id,
