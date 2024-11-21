@@ -1,10 +1,12 @@
 import os
+import typing
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from spacefrontiers.clients import SearchApiClient
 from spacefrontiers.clients.types import (
     SearchRequest,
+    SimpleSearchRequest,
 )
 
 from izihawa_loglib.request_context import RequestContext
@@ -28,7 +30,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Space Frontiers MCP server",
-    dependencies=["izihawa-loglib", "spacefrontiers-clients"],
+    dependencies=["izihawa-loglib", "spacefrontiers-clients>=0.0.91"],
     lifespan=app_lifespan,
 )
 
@@ -70,16 +72,22 @@ async def general_search(
 
 
 @mcp.tool()
-async def news_search(
+async def telegram_search(
     ctx: Context,
     query: str,
+    telegram_channel_names: list[str] | None = None,
 ) -> str:
-    """Search over new posts in Telegram for a given query, suitable for search of fresh news"""
+    """Search over new posts in Telegram for a given query with possibility to filter search over particular channels,
+    suitable for search of fresh news"""
     api_key, user_id = process_authorization(ctx)
+    filters = {}
+    if telegram_channel_names:
+        filters["telegram_channel_names"] = telegram_channel_names
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
             query=query,
             sources=["telegram"],
+            filters=filters,
             limit=70,
         ),
         api_key=api_key,
@@ -89,21 +97,23 @@ async def news_search(
 
 
 @mcp.tool()
-async def telegram_search_in_channels(
+async def get_telegram_posts(
     ctx: Context,
-    query: str,
     telegram_channel_names: list[str],
+    query: str | None = None,
+    scoring: typing.Literal["default", "temporal"] = "default",
 ) -> str:
-    """Search for a query in specific Telegram channels"""
+    """Retrieve posts from Telegram channels with possibility to order by recency and filter by text query"""
     api_key, user_id = process_authorization(ctx)
-    return await ctx.request_context.lifespan_context.search_api_client.search(
-        SearchRequest(
+    return await ctx.request_context.lifespan_context.search_api_client.simple_search(
+        SimpleSearchRequest(
             query=query,
-            sources=["telegram"],
+            source="telegram",
             filters={
                 "telegram_channel_names": telegram_channel_names,
             },
-            limit=70,
+            scoring=scoring,
+            limit=50,
         ),
         api_key=api_key,
         user_id=user_id,
