@@ -30,8 +30,7 @@ Performs a semantic search over specified Space Frontiers databases (library, te
 **Parameters:**
 
 *   `query` (str): The semantic search query.
-*   `sources` (list[SourceName], optional): A list of data sources to search. Defaults to `["library"]`.
-*   `filters` (FiltersType | None, optional): Optional filters to apply to the search. Defaults to `None`.
+*   `sources_filters` (dict[SourceName, dict], optional): A dict of data sources to search with filters. Defaults to `{"library": {}}`.
 *   `limit` (int, optional): The maximum number of results to return. Defaults to `10`.
 
 **Returns:** (str) Search results.
