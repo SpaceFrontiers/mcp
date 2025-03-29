@@ -3,6 +3,8 @@ import typing
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+
+from fastmcp import FastMCP, Context
 from spacefrontiers.clients import SearchApiClient
 from spacefrontiers.clients.types import (
     SearchRequest,
@@ -10,7 +12,6 @@ from spacefrontiers.clients.types import (
 )
 
 from izihawa_loglib.request_context import RequestContext
-from mcp.server.fastmcp import Context, FastMCP
 
 
 @dataclass
@@ -29,7 +30,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 
 mcp = FastMCP(
-    "Space Frontiers MCP server",
+    "Space Frontiers MCP Server",
     dependencies=["izihawa-loglib", "spacefrontiers-clients>=0.0.91"],
     lifespan=app_lifespan,
 )
@@ -52,7 +53,7 @@ def process_authorization(ctx: Context) -> tuple[str | None, str | None]:
     return api_key, user_id
 
 
-@mcp.tool()
+@mcp.tool
 async def general_search(
     ctx: Context,
     query: str,
@@ -71,7 +72,7 @@ async def general_search(
     )
 
 
-@mcp.tool()
+@mcp.tool
 async def telegram_search(
     ctx: Context,
     query: str,
@@ -95,14 +96,14 @@ async def telegram_search(
     )
 
 
-@mcp.tool()
+@mcp.tool
 async def get_telegram_posts(
     ctx: Context,
     telegram_channel_names: list[str],
     query: str | None = None,
     scoring: typing.Literal["default", "temporal"] = "default",
 ) -> str:
-    """Retrieve posts from Telegram channels with possibility to order by recency and filter by text query"""
+    """Retrieve posts from Telegram channels with the possibility to order by recency and filter by text query"""
     api_key, user_id = process_authorization(ctx)
     return await ctx.request_context.lifespan_context.search_api_client.simple_search(
         SimpleSearchRequest(
@@ -119,3 +120,7 @@ async def get_telegram_posts(
         user_id=user_id,
         request_context=RequestContext(request_source="mcp"),
     )
+
+
+if __name__ == "__main__":
+    mcp.run(transport="http", host="0.0.0.0", port=80, path="/")
