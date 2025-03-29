@@ -19,4 +19,4 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Command to run the application using uvicorn
-CMD ["poetry", "run", "python3", "mcp_server.py"]
+CMD ["python3", "mcp_server.py"]
