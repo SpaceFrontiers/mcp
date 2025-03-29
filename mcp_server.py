@@ -3,7 +3,7 @@ import time
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from fastmcp import FastMCP, Context
 from spacefrontiers.clients import SearchApiClient
@@ -55,10 +55,18 @@ def process_authorization(ctx: Context) -> tuple[str | None, str | None]:
     return api_key, user_id
 
 
+def format_search_response(search_response: SearchResponse) -> SearchResponse:
+    for search_document in search_response.search_documents:
+        if "issued_at" in search_document.document:
+            search_document.document["issued_at"] = datetime.fromtimestamp(search_document.document["issued_at"]).isoformat()
+    return search_response
+
+
 @mcp.tool
 async def general_search(
     ctx: Context,
     query: str,
+    limit: int = 50,
 ) -> SearchResponse:
     """General search over various subjects"""
     api_key, user_id = process_authorization(ctx)
@@ -66,7 +74,7 @@ async def general_search(
         SearchRequest(
             query=query,
             sources_filters={"library": {}, "reddit": {}, "telegram": {}},
-            limit=70,
+            limit=limit,
         ),
         api_key=api_key,
         user_id=user_id,
@@ -81,6 +89,7 @@ async def telegram_search(
     telegram_channel_usernames: list[str] | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    limit: int = 50
 ) -> SearchResponse:
     """Search over new posts in Telegram for a given query with the possibility to filter search over particular channels,
     suitable for search"""
@@ -93,20 +102,20 @@ async def telegram_search(
             start_date = date.fromtimestamp(0)
         if not end_date:
             end_date = date.today() + timedelta(days=1)
-        if end_date:
-            filters["issued_at"] = [(time.mktime(start_date.timetuple()), time.mktime(end_date.timetuple()))]
-    return await ctx.request_context.lifespan_context.search_api_client.search(
+        filters["issued_at"] = [(time.mktime(start_date.timetuple()), time.mktime(end_date.timetuple()))]
+    search_response = await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
             query=query,
             refining_target=None,
             query_classifier=QueryClassifierConfig(related_queries=3),
             sources_filters={"telegram": filters},
-            limit=70,
+            limit=limit,
         ),
         api_key=api_key,
         user_id=user_id,
         request_context=RequestContext(request_source="mcp"),
     )
+    return format_search_response(search_response)
 
 
 @mcp.tool
@@ -114,10 +123,11 @@ async def get_lastest_posts_for_channels(
     ctx: Context,
     telegram_channel_usernames: list[str],
     query: str | None = None,
+    limit: int = 10,
 ) -> SearchResponse:
-    """Retrieve the latest posts from Telegram channels with the possibility to order by recency and filter by text query"""
+    """Retrieve the latest posts from Telegram channels with the possibility to order by recency, filter by text query and limit the amount"""
     api_key, user_id = process_authorization(ctx)
-    return await ctx.request_context.lifespan_context.search_api_client.simple_search(
+    search_response = await ctx.request_context.lifespan_context.search_api_client.simple_search(
         SimpleSearchRequest(
             query=query,
             source="telegram",
@@ -125,12 +135,13 @@ async def get_lastest_posts_for_channels(
                 "telegram_channel_usernames": telegram_channel_usernames,
             },
             scoring="temporal",
-            limit=50,
+            limit=limit,
         ),
         api_key=api_key,
         user_id=user_id,
         request_context=RequestContext(request_source="mcp"),
     )
+    return format_search_response(search_response)
 
 
 if __name__ == "__main__":
