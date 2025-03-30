@@ -35,7 +35,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Space Frontiers MCP Server",
-    dependencies=["izihawa-loglib", "spacefrontiers-clients>=0.0.95"],
+    dependencies=["izihawa-loglib", "spacefrontiers-clients>=0.0.98"],
     lifespan=app_lifespan,
 )
 
@@ -73,23 +73,37 @@ def setup_date_filter(start_date, end_date, filters):
         filters["issued_at"] = [(time.mktime(start_date.timetuple()), time.mktime(end_date.timetuple()))]
 
 
-@mcp.tool
-async def research_tool(
-    ctx: Context,
-    query: Annotated[str, Field(description="The search query")],
-    sources: Annotated[list[Literal["wiki", "pubmed", "standard"]], Field(description="The datasets to search query in")],
-    start_date: Annotated[date | None, Field(description="Search documents starting from the date")] = None,
-    end_date: Annotated[date | None, Field(description="Search documents before the date")] = None,
-    limit: Annotated[int, Field(description="The approximate amount of Telegram posts to search", ge=1, le=100)] = 50,
-) -> SearchResponse:
-    """Tool for retrieving documents on scholar, standard or general topics in different datasets"""
-    api_key, user_id = process_authorization(ctx)
-    filters = {}
+def setup_sources_filter(sources, filters):
     if sources:
         if "pubmed" in sources:
             sources.remove("pubmed")
             filters["metadata.is_pubmed"] = [True]
-        filters["type"] = sources
+        if "arxiv" in sources:
+            sources.remove("arxiv")
+            filters.setdefault("metadata.publisher", []).append("arxiv")
+        if "biorxiv" in sources:
+            sources.remove("biorxiv")
+            filters.setdefault("metadata.publisher", []).append("biorxiv")
+        if "medRxiv" in sources:
+            sources.remove("medrxiv")
+            filters.setdefault("metadata.publisher", []).append("medrxiv")
+        if sources:
+            filters["type"] = sources
+
+
+@mcp.tool
+async def research_tool(
+    ctx: Context,
+    query: Annotated[str, Field(description="The search query")],
+    source: Annotated[Literal["wiki", "pubmed", "standard", "arxiv", "biorxiv", "medrxiv"], Field(description="The datasets to search query in")],
+    start_date: Annotated[date | None, Field(description="Search documents starting from the date")] = None,
+    end_date: Annotated[date | None, Field(description="Search documents before the date")] = None,
+    limit: Annotated[int, Field(description="The approximate amount of documents to search", ge=1, le=100)] = 50,
+) -> SearchResponse:
+    """Tool for retrieving documents on scholar, standard or general topics in different datasets"""
+    api_key, user_id = process_authorization(ctx)
+    filters = {}
+    setup_sources_filter([source], filters)
     setup_date_filter(start_date, end_date, filters)
     search_response = await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
@@ -102,6 +116,32 @@ async def research_tool(
         request_context=RequestContext(request_source="mcp"),
     )
     return format_search_response(search_response)
+
+
+@mcp.tool
+async def get_recent_scholar_publications(
+    ctx: Context,
+    source: Annotated[Literal["pubmed", "arxiv", "biorxiv", "medrxiv"], Field(description="The datasets to get recent papers")],
+    limit: Annotated[int, Field(description="The approximate amount of Telegram posts to search", ge=1, le=100)] = 50,
+) -> SearchResponse:
+    """Get the most recent scholar publications from the selected source"""
+    api_key, user_id = process_authorization(ctx)
+    filters = {}
+    setup_sources_filter([source], filters)
+    search_response = await ctx.request_context.lifespan_context.search_api_client.simple_search(
+        SimpleSearchRequest(
+            source="library",
+            filters=filters,
+            scoring="temporal",
+            limit=limit,
+            mode="or",
+        ),
+        api_key=api_key,
+        user_id=user_id,
+        request_context=RequestContext(request_source="mcp"),
+    )
+    return format_search_response(search_response)
+
 
 
 @mcp.tool(annotations={"title": "Telegram search"})
