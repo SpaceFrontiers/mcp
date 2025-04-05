@@ -150,6 +150,7 @@ async def get_recent_scholar_publications(
     When to use:
     - Use for requests like "recent arxiv papers" or "latest medrxiv".
     - Does NOT accept a free-text query. For query-based search, use `research_tool`.
+    - Recent by default means 30 days
     """
     api_key, user_id = process_authorization(ctx)
     filters = {}
@@ -195,6 +196,7 @@ async def telegram_search(
     - For "recent posts in Telegram" without a query, use `get_recent_posts_from_telegram`.
     - For "recent posts from @channel", use `get_recent_posts_from_telegram`
       with `telegram_channel_usernames=["@channel"]`.
+    - Recent by default means 1-7 days
     """
     api_key, user_id = process_authorization(ctx)
     filters = {}
