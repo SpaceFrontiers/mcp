@@ -10,7 +10,6 @@ from spacefrontiers.clients.types import (
     SourceName,
 )
 
-from fastapi import FastAPI
 from izihawa_loglib.request_context import RequestContext
 from mcp.server.fastmcp import Context, FastMCP
 
@@ -30,7 +29,6 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
         yield AppContext(search_api_client=search_api_client)
 
 
-app = FastAPI()
 mcp = FastMCP(
     "Space Frontiers MCP server",
     dependencies=["izihawa-loglib", "spacefrontiers-clients"],
@@ -40,7 +38,7 @@ mcp = FastMCP(
 
 def process_authorization(ctx: Context) -> tuple[str | None, str | None]:
     api_key, user_id = None, None
-    if not ctx.request_context.request:
+    if not getattr(ctx.request_context, "request", None):
         api_key = os.environ.get("SPACE_FRONTIERS_API_KEY")
     else:
         headers = ctx.request_context.request.headers
@@ -99,6 +97,3 @@ async def search(
         user_id=user_id,
         request_context=RequestContext(request_source="mcp"),
     )
-
-
-app.mount("/", mcp.sse_app())
