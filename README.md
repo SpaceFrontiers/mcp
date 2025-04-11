@@ -51,4 +51,12 @@ The server utilizes the following environment variables:
 
 ## Running the Server
 
+To run the server for use with the Claude App or STDIO communication, execute the following command in your terminal:
+
+```bash
+uv run mcp run main.py
+```
+
+Make sure to set the `SPACE_FRONTIERS_API_KEY` environment variable before running the server.
+
 _(Instructions on how to run the server, e.g., using Docker or `uvicorn`, can be added here)_ 
