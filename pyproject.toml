@@ -1,0 +1,15 @@
+[project]
+name = "spacefrontiers-mcp"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.12",
+    "izihawa-loglib>=1.1.21",
+    "mcp[cli]>=1.6.0",
+    "spacefrontiers-clients==0.0.88",
+    "uvicorn>=0.34.0",
+]
+
+[tool.uv.sources]
+mcp = { git = "https://github.com/ylassoued/python-sdk", branch = "ylassoued/feat-request" }
