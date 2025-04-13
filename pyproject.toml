@@ -7,7 +7,7 @@ dependencies = [
     "fastapi>=0.115.12",
     "izihawa-loglib>=1.1.21",
     "mcp[cli]>=1.6.0",
-    "spacefrontiers-clients==0.0.88",
+    "spacefrontiers-clients==0.0.89",
     "uvicorn>=0.34.0",
 ]
 

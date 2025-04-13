@@ -51,11 +51,30 @@ def process_authorization(ctx: Context) -> tuple[str | None, str | None]:
 
 
 @mcp.tool()
+async def general_search(
+    ctx: Context,
+    query: str,
+) -> str:
+    """General search over various subjects"""
+    api_key, user_id = process_authorization(ctx)
+    return await ctx.request_context.lifespan_context.search_api_client.search(
+        SearchRequest(
+            query=query,
+            sources=["library", "reddit", "telegram"],
+            limit=70,
+        ),
+        api_key=api_key,
+        user_id=user_id,
+        request_context=RequestContext(request_source="mcp"),
+    )
+
+
+@mcp.tool()
 async def news_search(
     ctx: Context,
     query: str,
 ) -> str:
-    """Search over posts in Telegram for a given query"""
+    """Search over new posts in Telegram for a given query, suitable for search of fresh news"""
     api_key, user_id = process_authorization(ctx)
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
@@ -75,7 +94,7 @@ async def telegram_search_in_channels(
     query: str,
     telegram_channel_names: list[str],
 ) -> str:
-    """Search in specific telegram channels"""
+    """Search for a query in specific Telegram channels"""
     api_key, user_id = process_authorization(ctx)
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
