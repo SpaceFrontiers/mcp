@@ -194,6 +194,16 @@ def setup_tools(mcp: FastMCP):
                 )
             ),
         ],
+        mode: Annotated[
+            Literal['wide', 'focused'],
+            Field(
+                description=(
+                    'Mode controls snippet coverage: "wide" (limit=20) for '
+                    'comprehensive document content, "focused" (limit=5) for '
+                    'small targeted parts related to query.'
+                )
+            ),
+        ] = 'focused',
     ) -> dict:
         """
         Retrieve a single document by its URI with content filtering.
@@ -214,6 +224,11 @@ def setup_tools(mcp: FastMCP):
                 Obtain from resolve_id tool.
             query: Query to filter content within the document
                 (required). Returns only snippets matching this query.
+            mode: Mode controls snippet coverage (optional, default: "focused").
+                - "wide" (limit=20): Use when you need most of the document
+                  content related to query.
+                - "focused" (limit=5): Use when you need a small, targeted
+                  part of the document related to query.
             source: Source name (library, telegram, reddit, youtube).
                 Use the source returned by resolve_id. If not provided,
                 it will be auto-detected from the URI.
@@ -237,6 +252,9 @@ def setup_tools(mcp: FastMCP):
         source = get_source_from_uri(document_uri)
         client = ctx.request_context.lifespan_context.search_api_client
 
+        # Map mode to limit
+        limit = 20 if mode == 'wide' else 5
+
         # Always use regular search to filter content within the document
         sources_filters = {source: {'uris': [document_uri]}}
 
@@ -244,7 +262,7 @@ def setup_tools(mcp: FastMCP):
             SearchRequest(
                 query=query,
                 sources_filters=sources_filters,
-                limit=20,
+                limit=limit,
             ),
             api_key=api_key,
             user_id=user_id,
