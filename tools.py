@@ -1,250 +1,388 @@
-from datetime import date
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
 from izihawa_loglib.request_context import RequestContext
 from pydantic import Field
-from spacefrontiers.clients.types import (
-    QueryClassifierConfig,
-    SearchRequest,
-    SearchResponse,
-    SimpleSearchRequest,
-)
+from spacefrontiers.clients.types import SearchRequest, SearchResponse
 
-from utils import format_search_response, process_authorization, setup_date_filter, setup_sources_filter
+from utils import (
+    convert_issued_at,
+    format_document_with_content,
+    format_search_response,
+    get_source_from_uri,
+    process_authorization,
+    setup_sources_filter,
+)
 
 
 def setup_tools(mcp: FastMCP):
-    @mcp.tool(annotations={'title': 'Scholarly/General search (Wiki, PubMed, Arxiv, BioRxiv, medRxiv)'})
-    async def research_tool(
+    @mcp.tool(annotations={'title': 'Search for documents'})
+    async def search(
         ctx: Context,
-        query: Annotated[str, Field(description='Free-text search query (short descriptive phrase)')],
+        query: Annotated[str, Field(description='Free-text search query')],
         source: Annotated[
-            Literal['wiki', 'pubmed', 'standard', 'arxiv', 'biorxiv', 'medrxiv'],
-            Field(description='The dataset to search in'),
-        ],
-        start_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include documents on/after this date')
-        ] = None,
-        end_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include documents up to and including this date')
-        ] = None,
-        limit: Annotated[int, Field(description='Approximate number of documents to return', ge=1, le=100)] = 50,
-    ) -> SearchResponse:
-        """Query-based search across Wiki, scholarly and general sources.
-
-        When to use:
-        - Use for queries like "find papers about X" or "wiki info about Y".
-        - Requires a textual `query`.
-        - For "recent publications" without a query, use `get_recent_scholar_publications` instead.
-        """
-        api_key, user_id = process_authorization(ctx)
-        filters = {}
-        setup_sources_filter([source], filters)
-        setup_date_filter(start_date, end_date, filters)
-        search_response = await ctx.request_context.lifespan_context.search_api_client.search(
-            SearchRequest(
-                query=query,
-                sources_filters={'library': filters},
-                limit=limit,
+            Literal[
+                'wiki',
+                'pubmed',
+                'arxiv',
+                'biorxiv',
+                'medrxiv',
+                'standard',
+                'telegram',
+                'reddit',
+                'youtube',
+            ] | None,
+            Field(
+                description=(
+                    'Source to search in (wiki, pubmed, arxiv, biorxiv, '
+                    'medrxiv, standard, telegram, reddit, youtube). '
+                    'If not specified, searches in default sources.'
+                )
             ),
-            api_key=api_key,
-            user_id=user_id,
-            request_context=RequestContext(request_source='mcp'),
-        )
-        return format_search_response(search_response)
-
-    @mcp.tool(annotations={'title': 'Recent scholarly publications'})
-    async def get_recent_scholar_publications(
-        ctx: Context,
-        source: Annotated[
-            Literal['pubmed', 'arxiv', 'biorxiv', 'medrxiv'],
-            Field(description='The dataset to fetch recent publications from'),
-        ],
-        limit: Annotated[int, Field(description='Approximate number of publications to return', ge=1, le=100)] = 50,
-    ) -> SearchResponse:
-        """Get the most recent publications from a scholarly source.
-
-        When to use:
-        - Use for requests like "recent arxiv papers" or "latest medrxiv".
-        - Does NOT accept a free-text query. For query-based search, use `research_tool`.
-        - Recent by default means 30 days
-        """
-        api_key, user_id = process_authorization(ctx)
-        filters = {}
-        setup_sources_filter([source], filters)
-        search_response = await ctx.request_context.lifespan_context.search_api_client.simple_search(
-            SimpleSearchRequest(
-                source='library',
-                filters=filters,
-                scoring='temporal',
-                limit=limit,
-                mode='or',
-            ),
-            api_key=api_key,
-            user_id=user_id,
-            request_context=RequestContext(request_source='mcp'),
-        )
-        return format_search_response(search_response)
-
-    @mcp.tool(annotations={'title': 'Telegram search (query-based)'})
-    async def telegram_search(
-        ctx: Context,
-        query: Annotated[str, Field(description='Free-text query to match in Telegram posts')],
-        telegram_channel_usernames: Annotated[
-            list[str] | None,
-            Field(description='List of Telegram channel usernames to filter by (with or without leading @)'),
-        ] = None,
-        start_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include posts on/after this date')
-        ] = None,
-        end_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include posts up to and including this date')
-        ] = None,
-        limit: Annotated[int, Field(description='Approximate number of Telegram posts to return', ge=1, le=100)] = 50,
-    ) -> SearchResponse:
-        """Query-based search over Telegram posts.
-
-        When to use:
-        - Use when a free-text `query` is provided (e.g., "search Telegram for X").
-        - Optional filters: `telegram_channel_usernames`, `start_date`, `end_date`.
-        - For "recent posts in Telegram" without a query, use `get_recent_posts_from_telegram`.
-        - For "recent posts from @channel", use `get_recent_posts_from_telegram`
-          with `telegram_channel_usernames=["@channel"]`.
-        - Recent by default means 1-7 days
-        """
-        api_key, user_id = process_authorization(ctx)
-        filters = {}
-        if telegram_channel_usernames:
-            filters['telegram_channel_usernames'] = telegram_channel_usernames
-        setup_date_filter(start_date, end_date, filters)
-        search_response = await ctx.request_context.lifespan_context.search_api_client.search(
-            SearchRequest(
-                query=query,
-                refining_target=None,
-                query_classifier=QueryClassifierConfig(related_queries=3),
-                sources_filters={'telegram': filters},
-                limit=limit,
-            ),
-            api_key=api_key,
-            user_id=user_id,
-            request_context=RequestContext(request_source='mcp'),
-        )
-        return format_search_response(search_response)
-
-    @mcp.tool(annotations={'title': 'Recent posts from Telegram'})
-    async def get_recent_posts_from_telegram(
-        ctx: Context,
-        telegram_channel_usernames: Annotated[
-            list[str] | None,
-            Field(description='Optional list of Telegram channel usernames to filter by (with or without leading @)'),
-        ] = None,
-        start_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include posts on/after this date')
-        ] = None,
-        end_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include posts up to and including this date')
-        ] = None,
-        limit: Annotated[int, Field(description='Total number of Telegram posts to return', ge=1, le=100)] = 50,
-    ) -> SearchResponse:
-        """Retrieve recent Telegram posts ordered by recency (no free-text query).
-
-        When to use:
-        - Use for requests like "recent posts in Telegram".
-        - Optionally filter by `telegram_channel_usernames` and/or a date range.
-        - For query-based Telegram search, use `telegram_search`.
-        """
-        api_key, user_id = process_authorization(ctx)
-        filters: dict[str, object] = {}
-        if telegram_channel_usernames:
-            filters['telegram_channel_usernames'] = telegram_channel_usernames
-        setup_date_filter(start_date, end_date, filters)
-        search_response = await ctx.request_context.lifespan_context.search_api_client.simple_search(
-            SimpleSearchRequest(
-                source='telegram',
-                filters=filters,
-                scoring='temporal',
-                limit=limit,
-            ),
-            api_key=api_key,
-            user_id=user_id,
-            request_context=RequestContext(request_source='mcp'),
-        )
-        return format_search_response(search_response)
-
-    @mcp.tool(annotations={'title': 'Reddit search (query-based)'})
-    async def reddit_search(
-        ctx: Context,
-        query: Annotated[str, Field(description='Free-text query to match in Reddit posts')],
-        subreddits: Annotated[
-            list[str] | None, Field(description='List of subreddit names (with or without leading r/)')
-        ] = None,
-        start_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include posts on/after this date')
-        ] = None,
-        end_date: Annotated[
-            date | None, Field(description='ISO date (YYYY-MM-DD). Include posts up to and including this date')
         ] = None,
         limit: Annotated[
-            int, Field(description='Approximate number of Reddit submissions to return', ge=1, le=100)
-        ] = 50,
+            int,
+            Field(description='Number of results to return', ge=1, le=100),
+        ] = 20,
     ) -> SearchResponse:
-        """Query-based search over Reddit posts.
+        """
+        Search across multiple sources and return top N documents.
 
-        When to use:
-        - Use when a free-text `query` is provided (e.g., "search Reddit for X").
-        - Optional filters: `subreddits` (accepts names with or without leading r/), `start_date`, `end_date`.
-        - For "recent posts from Reddit" without a query, use `get_recent_posts_from_reddit`.
+        This is the primary search tool that performs semantic search
+        across various data sources including academic papers, Wikipedia,
+        social media, and more. Each result includes:
+        - Document ID and metadata (title, authors, abstract, etc.)
+        - Relevant snippets from the document
+        - Relevance scores
+
+        Supported sources:
+        - wiki: Wikipedia articles
+        - pubmed: PubMed medical literature
+        - arxiv: ArXiv preprints
+        - biorxiv: BioRxiv preprints
+        - medrxiv: MedRxiv preprints
+        - standard: Other academic papers and documents
+        - telegram: Telegram posts and messages
+        - reddit: Reddit posts and discussions
+        - youtube: YouTube videos and transcripts
+
+        Args:
+            query: Free-text search query
+            sources: List of sources to search, or None to search all
+            limit: Maximum number of results to return (default: 20)
+
+        Returns:
+            SearchResponse containing:
+            - search_documents: List of documents with snippets, IDs
+            - count: Total number of matching documents
+            - has_next: Whether there are more results available
         """
         api_key, user_id = process_authorization(ctx)
-        filters = {}
-        if subreddits:
-            filters['metadata.subreddit'] = [subreddit.removeprefix('r/') for subreddit in subreddits]
-        setup_date_filter(start_date, end_date, filters)
-        search_response = await ctx.request_context.lifespan_context.search_api_client.search(
+
+        # Build sources filters using utility function
+        sources_filters = {}
+        if source:
+            library_filters = {}
+            setup_sources_filter([source], library_filters)
+            if library_filters:
+                sources_filters['library'] = library_filters
+            if 'telegram' == source:
+                sources_filters['telegram'] = {}
+            if 'reddit' == source:
+                sources_filters['reddit'] = {}
+            if 'youtube' == source:
+                sources_filters['youtube'] = {}
+
+        search_response = await (
+            ctx.request_context.lifespan_context.search_api_client.search(
+                SearchRequest(
+                    query=query,
+                    sources_filters=sources_filters,
+                    limit=limit,
+                    mode="or",
+                ),
+                api_key=api_key,
+                user_id=user_id,
+                request_context=RequestContext(request_source='mcp'),
+            )
+        )
+
+        return format_search_response(search_response)
+
+    @mcp.tool(annotations={'title': 'Resolve document identifiers to URIs'})
+    async def resolve_id(
+        ctx: Context,
+        text: Annotated[
+            str,
+            Field(
+                description=(
+                    'Text containing identifiers to resolve '
+                    '(DOIs, ISBNs, PubMed IDs, URLs, etc.)'
+                )
+            ),
+        ],
+        find_all: Annotated[
+            bool,
+            Field(
+                description='Find all possible matches or just the best one'
+            ),
+        ] = False,
+    ) -> dict:
+        """
+        Resolve textual identifiers into document URIs and sources.
+
+        This tool takes text that may contain various types of document
+        identifiers and converts them into standardized URIs with their
+        corresponding source names. Use the returned source in get_document.
+
+        Supported identifier types:
+        - DOI (Digital Object Identifier): e.g.,
+          "10.1000/xyz123" -> "doi://10.1000/xyz123" (source: library)
+        - ISBN (International Standard Book Number) (source: library)
+        - PubMed IDs: e.g.,
+          "PMID:12345678" -> "pubmed://12345678" (source: library)
+        - ArXiv IDs: e.g.,
+          "arXiv:2301.00001" -> "arxiv://2301.00001" (source: library)
+        - Telegram usernames and links (source: telegram)
+        - Reddit subreddits (source: reddit)
+        - YouTube links (source: youtube)
+        - GOST standards, URLs, and more...
+
+        Args:
+            text: Text containing one or more identifiers to resolve
+            find_all: If True, return all matches found
+
+        Returns:
+            Dictionary containing:
+            - success: Whether any matches were found
+            - matches: List of resolved identifiers with:
+                - id_type: Type of identifier (e.g., "doi", "pubmed")
+                - original_text: The input text
+                - resolved_uri: The standardized URI
+                - source: Source name (library, telegram, reddit, youtube)
+                - value: The extracted identifier value
+                - confidence: Confidence score (0-1)
+                - metadata: Additional information about the match
+        """
+        api_key, user_id = process_authorization(ctx)
+
+        response = await (
+            ctx.request_context.lifespan_context.search_api_client.resolve_id(
+                {
+                    'text': text,
+                    'find_all': find_all,
+                },
+                api_key=api_key,
+                user_id=user_id,
+                request_context=RequestContext(request_source='mcp'),
+            )
+        )
+
+        # Add source information to each match
+        if response.get('matches'):
+            for match in response['matches']:
+                match['source'] = get_source_from_uri(
+                    match.get('resolved_uri', '')
+                )
+
+        return response
+
+    @mcp.tool(annotations={'title': 'Get a document by URI'})
+    async def get_document(
+        ctx: Context,
+        document_uri: Annotated[
+            str,
+            Field(
+                description=(
+                    'Document URI (e.g., doi://10.1000/123, '
+                    'pubmed://12345) to retrieve'
+                )
+            ),
+        ],
+        query: Annotated[
+            str,
+            Field(
+                description=(
+                    'Query to filter content within the document. '
+                    'This determines which parts of the document are '
+                    'returned as snippets.'
+                )
+            ),
+        ],
+        source: Annotated[
+            Literal['library', 'telegram', 'reddit', 'youtube'] | None,
+            Field(
+                description=(
+                    'Source to retrieve from (obtained from resolve_id). '
+                    'If not provided, auto-detected from URI.'
+                )
+            ),
+        ] = None,
+    ) -> dict:
+        """
+        Retrieve a single document by its URI with content filtering.
+
+        This tool retrieves a specific document by its URI (obtained from
+        resolve_id tool) and filters its content based on the query.
+        The returned document includes all metadata fields and a 'content'
+        field with joined snippets matching the query.
+
+        The query is required and determines which parts of the
+        document are returned. This is useful for:
+        - Large documents: Get only relevant sections
+        - Focused information: Extract specific topics or concepts
+        - Efficient retrieval: Avoid returning entire lengthy documents
+
+        Args:
+            document_uri: Document URI to retrieve (required).
+                Obtain from resolve_id tool.
+            query: Query to filter content within the document
+                (required). Returns only snippets matching this query.
+            source: Source name (library, telegram, reddit, youtube).
+                Use the source returned by resolve_id. If not provided,
+                it will be auto-detected from the URI.
+
+        Returns:
+            Dictionary containing:
+            - id: Document ID
+            - title: Document title
+            - authors: List of authors
+            - abstract: Document abstract
+            - content: Joined snippets matching the query
+            - metadata: Additional document metadata
+            - issued_at: Publication date (ISO format)
+            - type: Document type
+            - tags: Document tags
+            - languages: Document languages
+            - references: Document references
+            - source: Source of the document
+        """
+        api_key, user_id = process_authorization(ctx)
+
+        # Auto-detect source from URI if not provided
+        if not source:
+            source = get_source_from_uri(document_uri)
+
+        client = ctx.request_context.lifespan_context.search_api_client
+
+        # Always use regular search to filter content within the document
+        sources_filters = {source: {'uris': [document_uri]}}
+
+        search_response = await client.search(
             SearchRequest(
                 query=query,
-                refining_target=None,
-                query_classifier=QueryClassifierConfig(related_queries=3),
-                sources_filters={'reddit': filters},
-                limit=limit,
+                sources_filters=sources_filters,
+                limit=1,
             ),
             api_key=api_key,
             user_id=user_id,
             request_context=RequestContext(request_source='mcp'),
         )
-        return format_search_response(search_response)
 
-    @mcp.tool(annotations={'title': 'Recent posts from Reddit'})
-    async def get_recent_posts_from_reddit(
+        # Format the document with joined snippets as content
+        document = format_document_with_content(search_response)
+
+        if not document:
+            return {'error': 'Document not found'}
+
+        return document
+
+    @mcp.tool(annotations={'title': 'Get document metadata only'})
+    async def get_document_metadata(
         ctx: Context,
-        subreddits: Annotated[
-            list[str], Field(description='List of subreddit names to load posts from (with or without leading r/)')
+        document_uri: Annotated[
+            str,
+            Field(
+                description=(
+                    'Document URI (e.g., doi://10.1000/123, '
+                    'pubmed://12345) to retrieve'
+                )
+            ),
         ],
-        limit: Annotated[int, Field(description='Total number of Reddit posts to return', ge=1, le=100)] = 50,
-        with_comments: Annotated[
-            bool,
-            Field(description='Best-effort: include comments if available in backend (may be ignored)'),
-        ] = False,
-    ) -> SearchResponse:
-        """Retrieve the latest posts from specific Reddit subreddits ordered by recency.
+        source: Annotated[
+            Literal['library', 'telegram', 'reddit', 'youtube'] | None,
+            Field(
+                description=(
+                    'Source to retrieve from (obtained from resolve_id). '
+                    'If not provided, auto-detected from URI.'
+                )
+            ),
+        ] = None,
+    ) -> dict:
+        """
+        Quickly retrieve only metadata for a document (no content).
 
-        When to use:
-        - Use for requests like "latest on r/sub1, r/sub2".
-        - Does not accept a free-text query. For query-based search on Reddit, use `reddit_search`.
+        This is a fast tool for retrieving basic document information
+        without performing content search. Use this when you only need
+        metadata like title, authors, abstract, and references, and
+        don't need the actual document content.
+
+        This tool is much faster than get_document because it:
+        - Does not perform semantic search
+        - Does not retrieve or process snippets
+        - Returns only essential metadata fields
+
+        Args:
+            document_uri: Document URI to retrieve (required).
+                Obtain from resolve_id tool.
+            source: Source name (library, telegram, reddit, youtube).
+                Use the source returned by resolve_id. If not provided,
+                it will be auto-detected from the URI.
+
+        Returns:
+            Dictionary containing:
+            - id: Document ID
+            - title: Document title
+            - authors: List of authors
+            - abstract: Document abstract
+            - references: Document references
+            - metadata: Additional document metadata
+            - issued_at: Publication date (ISO format)
+            - type: Document type
+            - source: Source of the document
         """
         api_key, user_id = process_authorization(ctx)
-        search_response = await ctx.request_context.lifespan_context.search_api_client.simple_search(
-            SimpleSearchRequest(
-                source='reddit',
-                filters={
-                    'metadata.subreddit': subreddits,
-                },
-                scoring='temporal',
-                limit=limit,
-            ),
+
+        # Auto-detect source from URI if not provided
+        if not source:
+            source = get_source_from_uri(document_uri)
+
+        # Metadata fields only (no content, no snippets)
+        fields = [
+            'id',
+            'title',
+            'authors',
+            'abstract',
+            'references',
+            'metadata',
+            'issued_at',
+            'type',
+        ]
+
+        client = ctx.request_context.lifespan_context.search_api_client
+
+        # Direct retrieval without search - fast metadata-only fetch
+        search_response = await client.documents_search(
+            {
+                'source': source,
+                'filters': {'uris': [document_uri]},
+                'fields': fields,
+                'limit': 1,
+            },
             api_key=api_key,
             user_id=user_id,
             request_context=RequestContext(request_source='mcp'),
         )
-        return format_search_response(search_response)
+
+        if not search_response.search_documents:
+            return {'error': 'Document not found'}
+
+        search_document = search_response.search_documents[0]
+        document = search_document.document.copy()
+
+        # Convert timestamp if present using shared utility
+        convert_issued_at(document)
+
+        document['source'] = search_document.source
+
+        return document
