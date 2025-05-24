@@ -25,7 +25,7 @@ async def app_lifespan(_: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     'Space Frontiers MCP Server',
-    dependencies=['izihawa-loglib', 'spacefrontiers-clients>=0.0.111'],
+    dependencies=['izihawa-loglib', 'spacefrontiers-clients>=0.0.112'],
     lifespan=app_lifespan,
     instructions="""
     Do searches over datasets and helps with the analysis of these documents and returns search documents
