@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from fastmcp import Context, FastMCP
 from izihawa_loglib.request_context import RequestContext
 from pydantic import Field
-from spacefrontiers.clients.types import SearchRequest, SearchResponse
+from spacefrontiers.clients.types import QueryClassifierConfig, SearchRequest, SearchResponse
 
 from utils import (
     convert_issued_at,
@@ -102,6 +102,9 @@ def setup_tools(mcp: FastMCP):
                 query=query,
                 sources_filters=sources_filters,
                 limit=limit,
+                query_classifier=QueryClassifierConfig(
+                    related_queries=2,
+                ),
             ),
             api_key=api_key,
             user_id=user_id,
