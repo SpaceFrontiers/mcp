@@ -4,6 +4,10 @@
 
 This project implements a Model Context Protocol (MCP) server that acts as an interface to the Space Frontiers API. It allows language models to interact with Space Frontiers data sources through MCP tools. The server is built using the FastMCP library.
 
+<a href="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp/badge" alt="mcp-spacefrontiers MCP server" />
+</a>
+
 The server provides 4 core tools for LLM-accessible search and discovery across Space Frontiers sources:
 
 1. **search** - Perform semantic search across multiple sources (scholarly literature, Wikipedia, Telegram, Reddit, YouTube, etc.)
