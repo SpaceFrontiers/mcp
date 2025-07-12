@@ -30,11 +30,10 @@ mcp = FastMCP(
     instructions="""
     Do searches over datasets and helps with the analysis of these documents and returns search documents
     """,
-    stateless_http=True,
 )
 
 
 if __name__ == '__main__':
     setup_tools(mcp)
     setup_prompts(mcp)
-    mcp.run(transport='http', host='0.0.0.0', port=80, path='/')
+    mcp.run(transport='http', host='0.0.0.0', port=80, path='/', stateless_http=True)
