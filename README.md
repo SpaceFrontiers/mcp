@@ -80,6 +80,10 @@ The server utilizes the following environment variables:
         *   `X-Api-Key: <your_api_key>`
         *   Alternatively, a user ID can be provided via the `X-User-Id` header. If none of these are provided, the server will attempt to use the `SPACE_FRONTIERS_API_KEY` environment variable if set.
         *   **Note on `X-User-Id`:** This header is intended for Space Frontiers internal usage only and cannot be exploited for external authentication.
+*   `WIDE_MODE_LIMIT`: Maximum number of snippets to return in "wide" mode for `get_document` tool.
+    *   **Default:** `20`
+*   `FOCUSED_MODE_LIMIT`: Maximum number of snippets to return in "focused" mode for `get_document` tool.
+    *   **Default:** `5`
 
 ## Running the Server
 
@@ -109,7 +113,9 @@ Ensure `SPACE_FRONTIERS_API_KEY` is set in the environment if your client does n
         "/path/to/your/spacefrontiers-mcp/mcp_server.py"
       ],
       "env": {
-        "SPACE_FRONTIERS_API_KEY": "YOUR_API_KEY_HERE"
+        "SPACE_FRONTIERS_API_KEY": "YOUR_API_KEY_HERE",
+        "WIDE_MODE_LIMIT": "20",
+        "FOCUSED_MODE_LIMIT": "5"
       }
     }
   }
