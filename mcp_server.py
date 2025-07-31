@@ -62,7 +62,7 @@ async def general_search(
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
             query=query,
-            sources=["library", "reddit", "telegram"],
+            sources_filters={"library": {}, "reddit": {}, "telegram": {}},
             limit=70,
         ),
         api_key=api_key,
@@ -86,8 +86,7 @@ async def telegram_search(
     return await ctx.request_context.lifespan_context.search_api_client.search(
         SearchRequest(
             query=query,
-            sources=["telegram"],
-            filters=filters,
+            sources_filters={"telegram": filters},
             limit=70,
         ),
         api_key=api_key,
@@ -108,9 +107,10 @@ async def get_telegram_posts(
     return await ctx.request_context.lifespan_context.search_api_client.simple_search(
         SimpleSearchRequest(
             query=query,
-            source="telegram",
-            filters={
-                "telegram_channel_names": telegram_channel_names,
+            sources_filters={
+                "telegram": {
+                    "telegram_channel_names": telegram_channel_names,
+                }
             },
             scoring=scoring,
             limit=50,
