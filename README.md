@@ -53,7 +53,7 @@ The server utilizes the following environment variables:
 To run the server for use with the Claude App or STDIO communication, execute the following command in your terminal:
 
 ```bash
-uv run mcp run main.py
+uv run fashmcp run mcp_server.py
 ```
 
 Make sure to set the `SPACE_FRONTIERS_API_KEY` environment variable before running the server.
@@ -69,14 +69,14 @@ Here's an example configuration for integrating the Space Frontiers MCP server w
       "command": "/path/to/your/uv", // Replace with the actual path to your uv installation
       "args": [
         "run",
+        "fastmcp",
+        "run",
         "--with",
         "izihawa-loglib",
         "--with",
         "mcp[cli]",
         "--with",
         "spacefrontiers-clients",
-        "mcp",
-        "run",
         "/path/to/your/spacefrontiers-mcp/mcp_server.py" // Replace with the actual path to mcp_server.py
       ],
       "env": {

@@ -4,11 +4,9 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.10,<4"
 dependencies = [
-    "fastapi>=0.115.12",
     "izihawa-loglib>=1.1.21",
-    "mcp[cli]>=1.6.0",
     "spacefrontiers-clients (>=0.0.92,<0.0.93)",
-    "uvicorn>=0.34.0",
+    "fastmcp (>=2.11.3,<3.0.0)",
 ]
 
 [tool.uv.sources]
