@@ -31,7 +31,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP(
     "Space Frontiers MCP Server",
-    dependencies=["izihawa-loglib", "spacefrontiers-clients>=0.0.91"],
+    dependencies=["izihawa-loglib", "spacefrontiers-clients>=0.0.92"],
     lifespan=app_lifespan,
 )
 
@@ -108,10 +108,9 @@ async def get_telegram_posts(
     return await ctx.request_context.lifespan_context.search_api_client.simple_search(
         SimpleSearchRequest(
             query=query,
-            sources_filters={
-                "telegram": {
-                    "telegram_channel_names": telegram_channel_names,
-                }
+            source="telegram",
+            filters={
+                "telegram_channel_names": telegram_channel_names,
             },
             scoring=scoring,
             limit=50,
