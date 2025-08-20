@@ -53,7 +53,7 @@ The server utilizes the following environment variables:
 To run the server for use with the Claude App or STDIO communication, execute the following command in your terminal:
 
 ```bash
-uv run fashmcp run mcp_server.py
+uv run fastmcp run mcp_server.py
 ```
 
 Make sure to set the `SPACE_FRONTIERS_API_KEY` environment variable before running the server.
