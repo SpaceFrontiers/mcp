@@ -2,38 +2,11 @@
 
 ## General Overview
 
-This project implements a Model Context Protocol (MCP) server that acts as an interface to the Space Frontiers API. It allows language models to interact with Space Frontiers data sources through defined tools. The server is built using FastAPI and the FastMCP library.
+This project implements a Model Context Protocol (MCP) server that acts as an interface to the Space Frontiers API. It allows language models to interact with Space Frontiers data sources through MCP tools. The server is built using the FastMCP library.
 
-**Note:** Space Frontiers provides a publicly hosted MCP server at `https://mcp.spacefrontiers.org`. To use it, obtain an API key from [https://spacefrontiers.org/developers/keys](https://spacefrontiers.org/developers/keys) and include it in your requests using the `Authorization: Bearer <your_api_key>` header.
+At a high level, the server provides LLM-accessible search and discovery across Space Frontiers sources such as scholarly literature, Telegram, and Reddit, including both query-based search and recent-item retrieval. Tools are self-describing via MCP schemas and annotations; your MCP client can list and introspect them at runtime.
 
-## Tools
-
-The server exposes the following tools for interaction:
-
-### `simple_search`
-
-Performs a keyword search over specified Space Frontiers databases (library, telegram, or reddit).
-
-**Parameters:**
-
-*   `source` (SourceName): The data source to search (e.g., "library", "telegram", "reddit").
-*   `query` (str): The keyword search query.
-*   `limit` (int): The maximum number of results to return.
-*   `offset` (int): The starting offset for the results.
-
-**Returns:** (str) Search results.
-
-### `search`
-
-Performs a semantic search over specified Space Frontiers databases (library, telegram, or reddit).
-
-**Parameters:**
-
-*   `query` (str): The semantic search query.
-*   `sources_filters` (dict[SourceName, dict], optional): A dict of data sources to search with filters. Defaults to `{"library": {}}`.
-*   `limit` (int, optional): The maximum number of results to return. Defaults to `10`.
-
-**Returns:** (str) Search results.
+**Hosted option:** Space Frontiers provides a publicly hosted MCP server at `https://mcp.spacefrontiers.org`. Obtain an API key from `https://spacefrontiers.org/developers/keys` and include it via the `Authorization: Bearer <your_api_key>` header.
 
 ## Environment Variables
 
@@ -50,23 +23,19 @@ The server utilizes the following environment variables:
 
 ## Running the Server
 
-To run the server for use with the Claude App or STDIO communication, execute the following command in your terminal:
-
 ```bash
-uv run fashmcp run mcp_server.py
+uv run fastmcp run mcp_server.py
 ```
 
-Make sure to set the `SPACE_FRONTIERS_API_KEY` environment variable before running the server.
+Ensure `SPACE_FRONTIERS_API_KEY` is set in the environment if your client does not pass authentication headers.
 
 ### Example Claude Desktop App Configuration (`claude_desktop_config.json`)
-
-Here's an example configuration for integrating the Space Frontiers MCP server with the Claude Desktop app:
 
 ```json
 {
   "mcpServers": {
     "Space Frontiers MCP server": {
-      "command": "/path/to/your/uv", // Replace with the actual path to your uv installation
+      "command": "/path/to/your/uv",
       "args": [
         "run",
         "fastmcp",
@@ -77,15 +46,14 @@ Here's an example configuration for integrating the Space Frontiers MCP server w
         "mcp[cli]",
         "--with",
         "spacefrontiers-clients",
-        "/path/to/your/spacefrontiers-mcp/mcp_server.py" // Replace with the actual path to mcp_server.py
+        "/path/to/your/spacefrontiers-mcp/mcp_server.py"
       ],
       "env": {
-        "SPACE_FRONTIERS_API_KEY": "YOUR_API_KEY_HERE" // Replace with your actual API key
+        "SPACE_FRONTIERS_API_KEY": "YOUR_API_KEY_HERE"
       }
     }
   }
 }
 ```
-**Note:** Replace the placeholder paths and API key with your actual values.
 
-_(Instructions on how to run the server, e.g., using Docker or `uvicorn`, can be added here)_ 
+Note: replace placeholder paths and the API key with your actual values.
