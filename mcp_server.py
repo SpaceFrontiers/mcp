@@ -175,9 +175,9 @@ async def telegram_search(
 
 
 @mcp.tool(annotations={"title": "Recent posts from Telegram channels"})
-async def get_recent_posts_from_telegram_channels(
+async def get_recent_posts_from_telegram_channel(
     ctx: Context,
-    telegram_channel_usernames: Annotated[list[str], Field(description="The list of Telegram channel usernames for loading messages")],
+    telegram_channel_username: Annotated[str, Field(description="Telegram channel usernames for loading messages")],
     limit: Annotated[int, Field(description="The total amount of Telegram posts to load", ge=1, le=100)] = 50,
 ) -> SearchResponse:
     """Retrieve the latest posts from Telegram channels ordered by recency"""
@@ -186,7 +186,7 @@ async def get_recent_posts_from_telegram_channels(
         SimpleSearchRequest(
             source="telegram",
             filters={
-                "telegram_channel_usernames": telegram_channel_usernames,
+                "telegram_channel_usernames": [telegram_channel_username],
             },
             scoring="temporal",
             limit=limit,
