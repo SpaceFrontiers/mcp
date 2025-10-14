@@ -42,7 +42,8 @@ def setup_tools(mcp: FastMCP):
                     'Source to search in. journal-article is all scholar articles, including arxiv, biorxiv, medrxiv, pubmed. If not specified, searches in all sources.'
                 )
             ),
-        ] | None = None,
+        ]
+        | None = None,
         limit: Annotated[
             int,
             Field(description='Number of results to return', ge=1, le=100),
@@ -193,14 +194,6 @@ def setup_tools(mcp: FastMCP):
                 )
             ),
         ],
-        source: Annotated[
-            Literal['library', 'telegram', 'reddit', 'youtube'] | None,
-            Field(
-                description=(
-                    'Source to retrieve from (obtained from resolve_id). If not provided, auto-detected from URI.'
-                )
-            ),
-        ] = None,
     ) -> dict:
         """
         Retrieve a single document by its URI with content filtering.
@@ -241,11 +234,7 @@ def setup_tools(mcp: FastMCP):
             - source: Source of the document
         """
         api_key, user_id = process_authorization(ctx)
-
-        # Auto-detect source from URI if not provided
-        if not source:
-            source = get_source_from_uri(document_uri)
-
+        source = get_source_from_uri(document_uri)
         client = ctx.request_context.lifespan_context.search_api_client
 
         # Always use regular search to filter content within the document
@@ -255,7 +244,7 @@ def setup_tools(mcp: FastMCP):
             SearchRequest(
                 query=query,
                 sources_filters=sources_filters,
-                limit=1,
+                limit=20,
             ),
             api_key=api_key,
             user_id=user_id,
