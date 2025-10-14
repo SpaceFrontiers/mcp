@@ -20,24 +20,21 @@ def setup_tools(mcp: FastMCP):
     async def search(
         ctx: Context,
         query: Annotated[str, Field(description='Free-text search query')],
-        sources: Annotated[
-            list[
-                Literal[
-                    'wiki',
-                    'pubmed',
-                    'arxiv',
-                    'biorxiv',
-                    'medrxiv',
-                    'standard',
-                    'telegram',
-                    'reddit',
-                    'youtube',
-                ]
-            ]
-            | None,
+        source: Annotated[
+            Literal[
+                'wiki',
+                'pubmed',
+                'arxiv',
+                'biorxiv',
+                'medrxiv',
+                'standard',
+                'telegram',
+                'reddit',
+                'youtube',
+            ] | None,
             Field(
                 description=(
-                    'Sources to search in (wiki, pubmed, arxiv, biorxiv, '
+                    'Source to search in (wiki, pubmed, arxiv, biorxiv, '
                     'medrxiv, standard, telegram, reddit, youtube). '
                     'If not specified, searches in default sources.'
                 )
@@ -84,28 +81,30 @@ def setup_tools(mcp: FastMCP):
 
         # Build sources filters using utility function
         sources_filters = {}
-        if sources:
+        if source:
             library_filters = {}
-            setup_sources_filter(sources, library_filters)
+            setup_sources_filter([source], library_filters)
             if library_filters:
                 sources_filters['library'] = library_filters
-            if 'telegram' in sources:
+            if 'telegram' == source:
                 sources_filters['telegram'] = {}
-            if 'reddit' in sources:
+            if 'reddit' == source:
                 sources_filters['reddit'] = {}
-            if 'youtube' in sources:
+            if 'youtube' == source:
                 sources_filters['youtube'] = {}
 
-        search_response = await ctx.request_context.lifespan_context.search_api_client.search(
-            SearchRequest(
-                query=query,
-                sources_filters=sources_filters,
-                limit=limit,
-                mode='or',
-            ),
-            api_key=api_key,
-            user_id=user_id,
-            request_context=RequestContext(request_source='mcp'),
+        search_response = await (
+            ctx.request_context.lifespan_context.search_api_client.search(
+                SearchRequest(
+                    query=query,
+                    sources_filters=sources_filters,
+                    limit=limit,
+                    mode="or",
+                ),
+                api_key=api_key,
+                user_id=user_id,
+                request_context=RequestContext(request_source='mcp'),
+            )
         )
 
         return format_search_response(search_response)
@@ -115,11 +114,18 @@ def setup_tools(mcp: FastMCP):
         ctx: Context,
         text: Annotated[
             str,
-            Field(description=('Text containing identifiers to resolve (DOIs, ISBNs, PubMed IDs, URLs, etc.)')),
+            Field(
+                description=(
+                    'Text containing identifiers to resolve '
+                    '(DOIs, ISBNs, PubMed IDs, URLs, etc.)'
+                )
+            ),
         ],
         find_all: Annotated[
             bool,
-            Field(description='Find all possible matches or just the best one'),
+            Field(
+                description='Find all possible matches or just the best one'
+            ),
         ] = False,
     ) -> dict:
         """
@@ -160,20 +166,24 @@ def setup_tools(mcp: FastMCP):
         """
         api_key, user_id = process_authorization(ctx)
 
-        response = await ctx.request_context.lifespan_context.search_api_client.resolve_id(
-            {
-                'text': text,
-                'find_all': find_all,
-            },
-            api_key=api_key,
-            user_id=user_id,
-            request_context=RequestContext(request_source='mcp'),
+        response = await (
+            ctx.request_context.lifespan_context.search_api_client.resolve_id(
+                {
+                    'text': text,
+                    'find_all': find_all,
+                },
+                api_key=api_key,
+                user_id=user_id,
+                request_context=RequestContext(request_source='mcp'),
+            )
         )
 
         # Add source information to each match
         if response.get('matches'):
             for match in response['matches']:
-                match['source'] = get_source_from_uri(match.get('resolved_uri', ''))
+                match['source'] = get_source_from_uri(
+                    match.get('resolved_uri', '')
+                )
 
         return response
 
@@ -182,7 +192,12 @@ def setup_tools(mcp: FastMCP):
         ctx: Context,
         document_uri: Annotated[
             str,
-            Field(description=('Document URI (e.g., doi://10.1000/123, pubmed://12345) to retrieve')),
+            Field(
+                description=(
+                    'Document URI (e.g., doi://10.1000/123, '
+                    'pubmed://12345) to retrieve'
+                )
+            ),
         ],
         query: Annotated[
             str,
@@ -198,7 +213,8 @@ def setup_tools(mcp: FastMCP):
             Literal['library', 'telegram', 'reddit', 'youtube'] | None,
             Field(
                 description=(
-                    'Source to retrieve from (obtained from resolve_id). If not provided, auto-detected from URI.'
+                    'Source to retrieve from (obtained from resolve_id). '
+                    'If not provided, auto-detected from URI.'
                 )
             ),
         ] = None,
@@ -276,7 +292,12 @@ def setup_tools(mcp: FastMCP):
         ctx: Context,
         document_uri: Annotated[
             str,
-            Field(description=('Document URI (e.g., doi://10.1000/123, pubmed://12345) to retrieve')),
+            Field(
+                description=(
+                    'Document URI (e.g., doi://10.1000/123, '
+                    'pubmed://12345) to retrieve'
+                )
+            ),
         ],
     ) -> dict:
         """
