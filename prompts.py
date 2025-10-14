@@ -55,6 +55,9 @@ Workflow
 6) Targeted extraction:
    - For each key document URI, call mcp_spacefrontiers_get_document with a specific query.
    - The query filters the document to return only relevant snippets.
+   - Choose mode based on your needs:
+     - Use mode="focused" (default) when looking for specific facts, quotes, or definitions.
+     - Use mode="wide" when you need broader context, comprehensive coverage of a topic within the document, or are exploring the document's overall treatment of a subject.
    - Extract evidence: quotes, numbers, definitions. Snippets are context-rich.
 7) Synthesis:
    - Cross-verify across multiple sources; note consensus and disagreements.
@@ -85,8 +88,10 @@ Parameter Guidance
   - Requires document_uri (from resolve_id) and query parameter.
   - Query is required and filters the document content to return relevant snippets.
   - Optional mode parameter: "wide" or "focused".
-    - "wide" (limit=20): Use when you need most of the document content related to query.
-    - "focused" (limit=5, default): Use when you need a small, targeted part of the document related to query.
+    - "focused" (limit=5, default): Use for pinpoint extraction.
+      Examples: specific statistics, a particular definition, methodology details, a key quote.
+    - "wide" (limit=20): Use for comprehensive coverage.
+      Examples: understanding full methodology section, gathering all results, exploring complete discussion of a concept.
   - Use specific queries to extract targeted information efficiently.
 - mcp_spacefrontiers_get_document_metadata:
   - Default first step for any candidate document URI.
@@ -115,8 +120,12 @@ Examples (templates)
   - find_all: false  # set true if text contains multiple identifiers
 - mcp_spacefrontiers_get_document_metadata:
   - document_uri: "doi://10.xxxx/xxxxx"  # URI from resolve_id
-- mcp_spacefrontiers_get_document (targeted extraction):
+- mcp_spacefrontiers_get_document (focused extraction):
   - document_uri: "doi://10.xxxx/xxxxx"  # URI from resolve_id
-  - query: "{specific term/phrase to find}"
-  - mode: "focused"  # or "wide" for comprehensive coverage (optional, defaults to "focused")
+  - query: "p-value statistical significance"  # specific fact
+  - mode: "focused"  # (default) returns ~5 snippets with exact info
+- mcp_spacefrontiers_get_document (wide extraction):
+  - document_uri: "doi://10.xxxx/xxxxx"  # URI from resolve_id
+  - query: "methodology experimental design"  # broader topic
+  - mode: "wide"  # returns ~20 snippets for comprehensive coverage
 """
