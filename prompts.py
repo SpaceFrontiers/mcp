@@ -27,7 +27,9 @@ Tool Selection Rules
   - Returns: resolved URIs and source names needed for document retrieval.
 - Locate specific facts inside a known document → use mcp_spacefrontiers_get_document
   - Required: document_uri (from resolve_id) and query.
+  - Optional: mode ("wide" or "focused").
   - The query filters content and returns only matching snippets from the document.
+  - Mode controls snippet coverage: "wide" (limit=20) for comprehensive document content, "focused" (limit=5) for small targeted parts.
   - Use this for targeted extraction from known documents.
 - Retrieve only document metadata → use mcp_spacefrontiers_get_document_metadata
   - Required: document_uri (from resolve_id).
@@ -82,6 +84,9 @@ Parameter Guidance
 - mcp_spacefrontiers_get_document:
   - Requires document_uri (from resolve_id) and query parameter.
   - Query is required and filters the document content to return relevant snippets.
+  - Optional mode parameter: "wide" or "focused".
+    - "wide" (limit=20): Use when you need most of the document content related to query.
+    - "focused" (limit=5, default): Use when you need a small, targeted part of the document related to query.
   - Use specific queries to extract targeted information efficiently.
 - mcp_spacefrontiers_get_document_metadata:
   - Default first step for any candidate document URI.
@@ -113,4 +118,5 @@ Examples (templates)
 - mcp_spacefrontiers_get_document (targeted extraction):
   - document_uri: "doi://10.xxxx/xxxxx"  # URI from resolve_id
   - query: "{specific term/phrase to find}"
+  - mode: "focused"  # or "wide" for comprehensive coverage (optional, defaults to "focused")
 """
