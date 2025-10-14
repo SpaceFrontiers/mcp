@@ -1990,7 +1990,7 @@ wheels = [
 
 [[package]]
 name = "spacefrontiers-clients"
-version = "0.0.110"
+version = "0.0.111"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiobaseclient" },
@@ -2000,9 +2000,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/72/a9/b714e0ab9151ce50c0b07b924bb782ad75fbcbd11d0f6be3d02c0d22d313/spacefrontiers_clients-0.0.110.tar.gz", hash = "sha256:a6341c1d06637a85b1854ccebc3a537b464d976739e702206a804c83aa810c33", size = 11542, upload-time = "2025-10-14T11:23:27.702Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6f/f5/41cfe8fdfaba0d4b54f0f22f4b2f27bc1d57339367f66841b15fe985bc32/spacefrontiers_clients-0.0.111.tar.gz", hash = "sha256:731de93b6653a6216fefed3db9949550d575c53643b338427d1ed3233d0053c9", size = 11540, upload-time = "2025-10-14T20:04:15.695Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/c5/34bde137344e8ca23f6fac9350571418770b1cde66fd4179d2c9657c2090/spacefrontiers_clients-0.0.110-py3-none-any.whl", hash = "sha256:31609bdb6823ffc396aff838ce5772aa0dbc30ec6de7e991605c23550095c5be", size = 14475, upload-time = "2025-10-14T11:23:26.558Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/76/0cf8ed4e8d43f5ce22f14bec2afbcfa6155c0461b8d3eeb879618acf065c/spacefrontiers_clients-0.0.111-py3-none-any.whl", hash = "sha256:ba4584b7227102953799fb614d847ed41cbd18e34d1e082bb8b1a83b067f4c2a", size = 14474, upload-time = "2025-10-14T20:04:14.348Z" },
 ]
 
 [[package]]
@@ -2024,7 +2024,7 @@ dev = [
 requires-dist = [
     { name = "fastmcp", specifier = ">=2.11.3,<3.0.0" },
     { name = "izihawa-loglib", specifier = ">=1.1.21" },
-    { name = "spacefrontiers-clients", specifier = ">=0.0.110" },
+    { name = "spacefrontiers-clients", specifier = ">=0.0.111" },
 ]
 
 [package.metadata.requires-dev]
