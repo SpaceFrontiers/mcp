@@ -33,9 +33,7 @@ def convert_issued_at(document: dict) -> None:
     """
     if 'issued_at' in document:
         try:
-            document['issued_at'] = datetime.fromtimestamp(
-                document['issued_at']
-            ).isoformat()
+            document['issued_at'] = datetime.fromtimestamp(document['issued_at']).isoformat()
         except (ValueError, OSError, OverflowError):
             pass
 
@@ -74,9 +72,7 @@ def format_document_with_content(
     # Convert timestamp if present
     if 'issued_at' in document:
         try:
-            document['issued_at'] = datetime.fromtimestamp(
-                document['issued_at']
-            ).isoformat()
+            document['issued_at'] = datetime.fromtimestamp(document['issued_at']).isoformat()
         except (ValueError, OSError, OverflowError):
             pass
 
