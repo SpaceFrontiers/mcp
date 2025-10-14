@@ -115,10 +115,20 @@ def setup_sources_filter(sources, filters):
         if 'medrxiv' in normalized_sources:
             filters.setdefault('metadata.publisher', []).append('medRxiv')
             normalized_sources.remove('medrxiv')
+        if 'books' in normalized_sources:
+            filters.setdefault('type', []).extend(
+                [
+                    'book',
+                    'monograph',
+                    'edited-book',
+                    'reference-book',
+                ]
+            )
+            normalized_sources.remove('books')
         # Remaining entries are treated as type filters
         # (e.g., 'wiki', 'standard')
         if normalized_sources:
-            filters['type'] = normalized_sources
+            filters.setdefault('type', []).extend(normalized_sources)
 
 
 def get_source_from_uri(uri: str) -> str:
