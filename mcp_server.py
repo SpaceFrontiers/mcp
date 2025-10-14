@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from fastmcp import FastMCP
 from spacefrontiers.clients import SearchApiClient
 
-from prompts import setup_prompts
 from tools import setup_tools
+from prompts import setup_prompts
 
 
 @dataclass

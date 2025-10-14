@@ -5,7 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.10,<4"
 dependencies = [
     "izihawa-loglib>=1.1.21",
-    "spacefrontiers-clients>=0.0.98",
+    "spacefrontiers-clients>=0.0.110",
     "fastmcp (>=2.11.3,<3.0.0)",
 ]
 
