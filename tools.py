@@ -1,90 +1,115 @@
-"""MCP tools: search and fetch.
+"""MCP tools: search, fetch, and search_in_document.
 
-search — discover documents via sparse vector search (returns snippets).
-fetch  — retrieve a specific document by URI, optionally filtering content
-         with a text query (returns relevant snippets or full document).
+search              — discover documents via sparse vector search (returns snippets).
+fetch               — retrieve a specific document by URI (full content + references).
+search_in_document  — find relevant passages within a single document.
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
-from client import MAX_CONTENT_LENGTH
-from formatting import format_document, format_referenced_by, format_search_results, format_snippets
+from client import MAX_CONTENT_LENGTH, AuthenticationError, InsufficientFundsError
+from formatting import (
+    format_document,
+    format_referenced_by,
+    format_search_results,
+    format_snippets,
+)
 
 logger = logging.getLogger(__name__)
 
-# Source → document type mapping
-SOURCE_TYPE_MAP: dict[str, list[str]] = {
-    'library': [
-        'journal-article', 'proceedings-article', 'book-chapter',
-        'book', 'edited-book', 'monograph', 'reference-book',
-        'patent', 'wiki',
-    ],
-    'reddit': ['submission', 'comment'],
-    'telegram': ['message'],
-    'youtube': ['video'],
-}
+Source = Literal['documents', 'social']
 
-SourceType = Literal['library', 'reddit', 'telegram', 'youtube']
+INSUFFICIENT_FUNDS_MSG = (
+    'Insufficient funds. Your Space Frontiers balance is too low for this request.\n\n'
+    'Add credits: https://spacefrontiers.org/payments?amount=10\n\n'
+    'Pricing: searches cost ~$0.005, document fetches ~$0.01.\n'
+    '$10 gives you approximately 2,000 searches.'
+)
+
+AUTH_ERROR_MSG = (
+    'Authentication required. Your API key may be invalid or expired.\n\n'
+    'Get a new API key: https://spacefrontiers.org/keys\n\n'
+    'Then update your MCP configuration with the new key.'
+)
+
+
+def _handle_billing_errors(fn):
+    """Decorator: catch billing/auth errors and return guidance text instead."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except InsufficientFundsError:
+            return INSUFFICIENT_FUNDS_MSG
+        except AuthenticationError:
+            return AUTH_ERROR_MSG
+
+    return wrapper
 
 
 def setup_tools(mcp: FastMCP):
     @mcp.tool(annotations={'title': 'Search for documents'})
+    @_handle_billing_errors
     async def search(
         ctx: Context,
         query: Annotated[str, Field(description='Free-text search query')],
         limit: Annotated[
             int,
-            Field(description='Number of results to return', ge=1, le=100),
+            Field(
+                description='Number of results to return. Use 20-30 for good coverage.',
+                ge=1,
+                le=100,
+            ),
         ] = 30,
         source: Annotated[
-            SourceType | None,
+            Source | None,
             Field(
                 description=(
-                    'Filter by source type. Options:\n'
-                    '- "library" — academic papers, books, patents, Wikipedia '
-                    '(use for scientific or factual queries)\n'
-                    '- "reddit" — Reddit posts and comments '
-                    '(use for opinions, discussions, community knowledge)\n'
-                    '- "telegram" — Telegram messages '
-                    '(use for real-time updates, news, community channels)\n'
-                    '- "youtube" — YouTube video transcripts '
-                    '(use for lectures, tutorials, talks)\n'
+                    'Which index to search:\n'
+                    '- "documents" — scholarly papers, books, patents, Wikipedia, '
+                    'standards, manuals (use for scientific, factual, or technical queries)\n'
+                    '- "social" — Reddit, Telegram, YouTube '
+                    '(use for opinions, discussions, news, community knowledge)\n'
                     'Omit to search all sources.'
                 ),
             ),
         ] = None,
     ) -> str:
-        """Search across all sources and return top documents with snippets.
+        """Search across a corpus of 120M+ documents and return top results with snippets.
 
-        Performs sparse-vector search over a large document corpus
-        (academic papers, books, Wikipedia, patents, manuals, social media).
-        Each result includes title, URIs (DOI, PubMed, arXiv, etc.),
+        The corpus includes two indexes:
+        - **documents**: academic papers (CrossRef, PubMed, arXiv), books, patents,
+          Wikipedia, technical standards, and manuals.
+        - **social**: Reddit posts/comments, Telegram channel messages, YouTube transcripts.
+
+        Each result includes title, URIs (DOI, ISBN, arXiv, PubMed, etc.),
         a relevance score, and the best-matching text snippet.
 
-        This is a cheap and fast tool — use it liberally. For better
-        precision, formulate 2-6 varied queries covering different aspects,
-        synonyms, or phrasings of the topic. For example, instead of a
-        single query "CRISPR gene editing", also try "cas9 genome
-        engineering", "guide RNA targeting", etc. You are encouraged to
-        send several search calls in parallel for these related queries.
-        Combine results across queries for comprehensive coverage.
-
-        Use the URIs from results with the ``fetch`` tool to read full
-        documents, explore their references, or find specific passages.
+        **Tips for effective searching:**
+        - Use a limit of **20-30** to get good coverage of the corpus.
+        - Use 2-6 varied queries covering different aspects, synonyms, or phrasings.
+          For example, instead of just "CRISPR gene editing", also try "cas9 genome
+          engineering", "guide RNA targeting", etc.
+        - Send several search calls in parallel for related queries and combine results.
+        - Use URIs from results with ``fetch`` to read full documents and follow citations.
+        - Use ``search_in_document`` to find specific passages within large documents.
         """
         client = ctx.request_context.lifespan_context.search_client
-        filter_types = SOURCE_TYPE_MAP.get(source) if source else None
-        data = await client.search(query, limit=limit, filter_types=filter_types, rerank=False)
+        index_names = [source] if source else None
+        data = await client.search(query, limit=limit, index_names=index_names)
         return format_search_results(data)
 
     @mcp.tool(annotations={'title': 'Fetch a document by URI'})
+    @_handle_billing_errors
     async def fetch(
         ctx: Context,
         uri: Annotated[
@@ -96,62 +121,80 @@ def setup_tools(mcp: FastMCP):
                 ),
             ),
         ],
-        text_filter: Annotated[
-            str | None,
-            Field(
-                description=(
-                    'Optional text query to find relevant passages within '
-                    'the document. When provided, returns scored snippets '
-                    'instead of the full content.'
-                ),
-            ),
-        ] = None,
     ) -> str:
-        """Retrieve a document by URI, optionally filtering to relevant passages.
+        """Retrieve a full document by its URI.
 
-        **Without text_filter** — loads the full document (title, authors,
-        abstract, content, metadata) plus its references (with titles and
-        URIs) and documents that cite this one (referenced_by). Use
-        reference URIs to follow the citation graph and load related papers
-        for deeper research.
+        Returns the document's title, authors, abstract, content, metadata,
+        references (with titles and URIs), and documents that cite this one.
 
-        **With text_filter** — runs a sparse search scoped to this single
-        document and returns the best-matching snippets. Good for finding
-        specific information within a long document without reading it all.
+        Use reference URIs to follow the citation graph and discover related work.
 
-        **When to use text_filter:** Search results include a **Size**
-        field (approximate token count). If a document is large (over 20K
-        tokens), consider using text_filter to extract only the relevant
-        passages instead of loading the entire content. For shorter
-        documents, fetching the full content is fine.
+        **For large documents** (over ~20K tokens as shown in search result Size field),
+        consider using ``search_in_document`` instead to extract only relevant passages.
 
-        This is a cheap tool — don't hesitate to fetch documents, follow
-        references, and do additional searches to build thorough context.
+        This is a cheap tool — don't hesitate to fetch documents and follow references.
         """
         client = ctx.request_context.lifespan_context.search_client
 
-        if text_filter:
-            # Fetch full doc, snippets, and referenced-by in parallel
-            doc, snippets_data, referenced_by_data = await asyncio.gather(
-                client.get_document_by_uri(uri),
-                client.get_document_by_uri(uri, text_filter=text_filter),
-                client.find_referenced_by(uri, limit=30),
-            )
-            if doc is None:
-                return 'Document not found.'
-            result = format_document(doc, max_content=0)
-            snippets_section = format_snippets(snippets_data)
-            if snippets_section:
-                result += '\n\n' + snippets_section
-        else:
-            # Fetch document and referenced-by docs in parallel
-            doc, referenced_by_data = await asyncio.gather(
-                client.get_document_by_uri(uri),
-                client.find_referenced_by(uri, limit=30),
-            )
-            if doc is None:
-                return 'Document not found.'
-            result = format_document(doc, max_content=MAX_CONTENT_LENGTH)
+        doc, referenced_by_data = await asyncio.gather(
+            client.get_document_by_uri(uri),
+            client.find_referenced_by(uri, limit=30),
+        )
+        if doc is None:
+            return 'Document not found.'
+        result = format_document(doc, max_content=MAX_CONTENT_LENGTH)
+
+        referenced_by_section = format_referenced_by(referenced_by_data)
+        if referenced_by_section:
+            result += '\n\n' + referenced_by_section
+        return result
+
+    @mcp.tool(annotations={'title': 'Search within a document'})
+    @_handle_billing_errors
+    async def search_in_document(
+        ctx: Context,
+        uri: Annotated[
+            str,
+            Field(
+                description=(
+                    'Exact URI of the document to search within. '
+                    'Must be copied verbatim from search results or references.'
+                ),
+            ),
+        ],
+        query: Annotated[
+            str,
+            Field(
+                description='Text query to find relevant passages within the document.',
+            ),
+        ],
+    ) -> str:
+        """Find relevant passages within a specific document.
+
+        Runs a sparse search scoped to one document and returns the best-matching
+        snippets along with document metadata and references.
+
+        Use this instead of ``fetch`` when:
+        - The document is large (over ~20K tokens) and you need specific information.
+        - You want to find particular passages without reading the entire content.
+        """
+        client = ctx.request_context.lifespan_context.search_client
+
+        snippets_data, referenced_by_data = await asyncio.gather(
+            client.get_document_by_uri(uri, text_filter=query),
+            client.find_referenced_by(uri, limit=30),
+        )
+        if snippets_data is None:
+            return 'Document not found.'
+
+        result = format_snippets(snippets_data)
+        if not result:
+            # Sparse search found no matching passages — fall back to full document
+            doc = await client.get_document_by_uri(uri)
+            if doc is not None:
+                result = format_document(doc, max_content=MAX_CONTENT_LENGTH)
+            else:
+                result = 'No matching passages found.'
 
         referenced_by_section = format_referenced_by(referenced_by_data)
         if referenced_by_section:

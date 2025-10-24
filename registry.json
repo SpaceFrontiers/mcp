@@ -1,0 +1,43 @@
+{
+  "name": "spacefrontiers",
+  "display_name": "Space Frontiers",
+  "description": "Semantic search across 170M+ academic papers, books, Wikipedia, patents, Reddit, Telegram, and YouTube. Three tools: search (find documents), fetch (get full content + citations), search_in_document (extract passages).",
+  "url": "https://mcp.spacefrontiers.org",
+  "transport": "http",
+  "auth": {
+    "type": "oauth2",
+    "oauth_metadata_url": "https://mcp.spacefrontiers.org/.well-known/oauth-authorization-server"
+  },
+  "install": {
+    "claude_code": "claude mcp add --transport http spacefrontiers https://mcp.spacefrontiers.org",
+    "instructions_url": "https://spacefrontiers.org/install.md"
+  },
+  "tools": [
+    {
+      "name": "search",
+      "description": "Free-text semantic search across 170M+ documents"
+    },
+    {
+      "name": "fetch",
+      "description": "Retrieve full document by URI with content, metadata, and citations"
+    },
+    {
+      "name": "search_in_document",
+      "description": "Find relevant passages within a specific document"
+    }
+  ],
+  "categories": ["research", "academic", "search"],
+  "pricing": {
+    "model": "per-request",
+    "search": "$0.005",
+    "fetch": "$0.01",
+    "free_tier": false,
+    "payment_url": "https://spacefrontiers.org/payments"
+  },
+  "links": {
+    "website": "https://spacefrontiers.org",
+    "documentation": "https://spacefrontiers.org/mcp",
+    "pricing": "https://spacefrontiers.org/pricing",
+    "github": "https://github.com/SpaceFrontiers/mcp"
+  }
+}
