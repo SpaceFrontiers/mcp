@@ -40,7 +40,7 @@ class SearchV2Client:
 
     def _get_headers(self) -> dict[str, str]:
         """Read auth headers from the current request's ContextVar."""
-        headers: dict[str, str] = {}
+        headers: dict[str, str] = {'x-request-source': 'mcp'}
         auth = auth_headers_var.get()
         if auth:
             for key in ('x-user-id', 'x-organization-id'):
