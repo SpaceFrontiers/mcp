@@ -34,9 +34,13 @@ Workflow
 1) Clarify the question and deliverable (definitions, scope, time constraints).
 2) Initial broad search for topic overview:
    - **Start with 1-2 search calls with different query phrasings.**
+   - For news, events, announcements, or time-sensitive topics, always include
+     a search with source="social" to cover Reddit, Telegram, and YouTube.
    - Collect candidate records: title, URIs, and snippets.
 3) Refine search with focused queries:
    - Run search with 2-3 more specific queries targeting gaps.
+   - If the topic involves community discussion, news, or current events,
+     run additional social-specific searches.
 4) Retrieve key documents:
    - For documents of interest, call fetch with their URI.
    - Assess relevance via abstract, content, and references.
