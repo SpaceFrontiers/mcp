@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Literal
 
 from fastmcp import Context, FastMCP
@@ -206,8 +207,8 @@ def setup_tools(mcp: FastMCP):
             Literal['wide', 'focused'],
             Field(
                 description=(
-                    'Mode controls snippet coverage: "wide" (limit=20) for '
-                    'comprehensive document content, "focused" (limit=5) for '
+                    'Mode controls snippet coverage: "wide" (default limit=20, configurable via WIDE_MODE_LIMIT) for '
+                    'comprehensive document content, "focused" (default limit=5, configurable via FOCUSED_MODE_LIMIT) for '
                     'small targeted parts related to query.'
                 )
             ),
@@ -233,9 +234,9 @@ def setup_tools(mcp: FastMCP):
             query: Query to filter content within the document
                 (required). Returns only snippets matching this query.
             mode: Mode controls snippet coverage (optional, default: "focused").
-                - "wide" (limit=20): Use when you need most of the document
+                - "wide" (default limit=20, set via WIDE_MODE_LIMIT): Use when you need most of the document
                   content related to query.
-                - "focused" (limit=5): Use when you need a small, targeted
+                - "focused" (default limit=5, set via FOCUSED_MODE_LIMIT): Use when you need a small, targeted
                   part of the document related to query.
             source: Source name (library, telegram, reddit, youtube).
                 Use the source returned by resolve_id. If not provided,
@@ -260,8 +261,10 @@ def setup_tools(mcp: FastMCP):
         source = get_source_from_uri(document_uri)
         client = ctx.request_context.lifespan_context.search_api_client
 
-        # Map mode to limit
-        limit = 20 if mode == 'wide' else 5
+        # Map mode to limit using environment variables
+        wide_limit = int(os.environ.get('WIDE_MODE_LIMIT', '20'))
+        focused_limit = int(os.environ.get('FOCUSED_MODE_LIMIT', '5'))
+        limit = wide_limit if mode == 'wide' else focused_limit
 
         # Always use regular search to filter content within the document
         sources_filters = {source: {'uris': [document_uri]}}
