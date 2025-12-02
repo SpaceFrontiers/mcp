@@ -60,12 +60,17 @@ def setup_tools(mcp: FastMCP):
         - Relevance scores
 
         Supported sources:
+        - books: Books, monographs, edited books, and reference books
+        - journal-article: All scholarly articles (includes arxiv, biorxiv, medrxiv, pubmed)
+        - magazine: Magazine articles and publications
+        - manual: Technical manuals and documentation
+        - patent: Patent documents
         - wiki: Wikipedia articles
         - pubmed: PubMed medical literature
         - arxiv: ArXiv preprints
         - biorxiv: BioRxiv preprints
         - medrxiv: MedRxiv preprints
-        - standard: Other academic papers and documents
+        - standard: Standards and specifications (e.g., GOST, ISO)
         - telegram: Telegram posts and messages
         - reddit: Reddit posts and discussions
         - youtube: YouTube videos and transcripts
