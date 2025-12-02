@@ -30,6 +30,7 @@ mcp = FastMCP(
     instructions="""
     Do searches over datasets and helps with the analysis of these documents and returns search documents
     """,
+    stateless_http=True,
 )
 
 
