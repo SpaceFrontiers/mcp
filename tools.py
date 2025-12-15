@@ -262,17 +262,29 @@ def _flatten_optional_unions(schema: Any) -> Any:
 
     Pydantic emits `Optional[T]` as a two-arm `anyOf` with the second arm being
     `{"type": "null"}`. JSON Schema clients should accept that, but Smithery and
-    a few other directory UIs render it as "unknown". Collapsing the wrapper
-    keeps the field semantically optional (we still send `null` or omit it) and
-    gives the UIs a concrete type to render.
+    a few other directory UIs render it as "unknown". Rewrite the same shape as
+    a JSON Schema multi-type array (`{"type": ["X", "null"]}`) which is the
+    canonical compact form per Draft 2020-12 and keeps `null` legal — runtime
+    code still returns `None` for empty optional fields, so dropping `null`
+    from the schema would break output validation in spec-strict clients.
     """
     if isinstance(schema, dict):
         any_of = schema.get('anyOf')
         if isinstance(any_of, list) and len(any_of) == 2:
             non_null = [s for s in any_of if s != {'type': 'null'}]
-            if len(non_null) == 1 and isinstance(non_null[0], dict):
+            if (
+                len(non_null) == 1
+                and isinstance(non_null[0], dict)
+                and isinstance(non_null[0].get('type'), str)
+            ):
                 merged = {k: v for k, v in schema.items() if k != 'anyOf'}
-                merged.update(non_null[0])
+                # Merge sibling fields from the non-null arm (items, enum, etc.)
+                # but rewrite `type` as a [<X>, "null"] tuple so null stays
+                # a valid value at validation time.
+                arm = non_null[0]
+                arm_type = arm['type']
+                merged.update({k: v for k, v in arm.items() if k != 'type'})
+                merged['type'] = [arm_type, 'null']
                 return _flatten_optional_unions(merged)
         return {k: _flatten_optional_unions(v) for k, v in schema.items()}
     if isinstance(schema, list):
