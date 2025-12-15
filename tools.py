@@ -293,12 +293,20 @@ def _flatten_optional_unions(schema: Any) -> Any:
 
 
 def _flatten_optional_unions_on(mcp: FastMCP) -> None:
-    """Apply `_flatten_optional_unions` to every registered tool's input + output schema."""
-    for tool in mcp._tool_manager._tools.values():
-        if tool.parameters:
-            tool.parameters = _flatten_optional_unions(tool.parameters)
-        if getattr(tool, 'output_schema', None):
-            tool.output_schema = _flatten_optional_unions(tool.output_schema)
+    """Apply `_flatten_optional_unions` to every registered tool's input + output schema.
+
+    FastMCP 3.x stores components on `mcp.local_provider._components`; the older
+    `_tool_manager._tools` attribute was removed when the provider abstraction
+    landed.
+    """
+    from fastmcp.tools.tool import Tool as _FastMCPTool
+    for component in mcp.local_provider._components.values():
+        if not isinstance(component, _FastMCPTool):
+            continue
+        if component.parameters:
+            component.parameters = _flatten_optional_unions(component.parameters)
+        if getattr(component, 'output_schema', None):
+            component.output_schema = _flatten_optional_unions(component.output_schema)
 
 
 def setup_tools(mcp: FastMCP):
