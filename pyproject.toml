@@ -1,20 +1,20 @@
 [project]
 name = "spacefrontiers-mcp"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Space Frontiers MCP server — full-text retrieval over papers, books, patents, Wikipedia, Reddit, Telegram, YouTube."
 requires-python = ">=3.10,<4"
 dependencies = [
     "aiohttp>=3.11.0",
     "fastmcp (>=2.11.3,<3.0.0)",
+    "pydantic>=2.7",
     "starlette",
     "uvicorn",
 ]
 
-[tool.uv.sources]
-mcp = { git = "https://github.com/ylassoued/python-sdk", branch = "ylassoued/feat-request" }
-
 [tool.uv]
 dev-dependencies = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=0.23",
     "ruff>=0.5.0,<1.0.0",
 ]
 

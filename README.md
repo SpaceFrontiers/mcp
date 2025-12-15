@@ -1,62 +1,94 @@
 # Space Frontiers MCP Server
 
-MCP server that connects LLMs to Space Frontiers search. Query 170M+ academic papers, books, Wikipedia, patents, Reddit, Telegram, and YouTube.
+A retrieval layer for AI agents over peer-reviewed papers, books, patents, Wikipedia, Reddit, Telegram, and YouTube. Returns full text and canonical source URIs for citation.
+
+Hosted at **https://mcp.spacefrontiers.org/** (Streamable HTTP transport, OAuth 2.1 with PKCE or Bearer API key).
+
+<a href="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp/badge" alt="Space Frontiers MCP" />
+</a>
 
 ## Tools
 
-| Tool | Description |
+All four tools are read-only, idempotent, and prefixed `spacefrontiers_` to avoid collisions in multi-server agent setups.
+
+| Tool | When to use |
 |------|-------------|
-| **search** | Sparse vector search across 170M+ documents. Returns titles, URIs, scores, snippets. Filter by `"documents"` (papers, books, patents, Wikipedia) or `"social"` (Reddit, Telegram, YouTube). For news, events, and current topics, always search social. |
-| **fetch** | Retrieve full document by URI — content, metadata, references, and citing documents. |
-| **search_in_document** | Find relevant passages within a single document using a text query. Ideal for large documents. |
+| `spacefrontiers_search_documents` | Peer-reviewed papers, books, patents, Wikipedia. Use for citations and prior art. |
+| `spacefrontiers_search_social` | Reddit, Telegram channels, YouTube transcripts. Use for news and community discussion. |
+| `spacefrontiers_fetch_document` | Full text + references for one canonical URI (DOI, arXiv, PMID, ISBN). |
+| `spacefrontiers_search_in_document` | Passages within one document by query. Use for documents over ~20K tokens. |
+
+Every search hit includes `source_uri`, `score`, `snippet`, `authors`, `issued_date`, and `content_size_tokens` for typed parsing and citation.
 
 ## Install
 
-### Claude Code
+The hosted server has its own [/mcp install page](https://spacefrontiers.org/mcp) with one-click links for Cursor, VS Code, and Smithery.
 
-```bash
-claude mcp add --transport http spacefrontiers https://mcp.spacefrontiers.org \
-  --header "Authorization: Bearer YOUR_API_KEY"
+### Claude Code (recommended)
+
+```sh
+claude mcp add --transport http spacefrontiers https://mcp.spacefrontiers.org
 ```
 
-Get an API key at [spacefrontiers.org/keys](https://spacefrontiers.org/keys).
+On first use a browser opens for OAuth login — no API key paste required.
 
-### Claude Desktop / Cursor / Windsurf
-
-Add to your MCP configuration:
+### Cursor / VS Code / Cline / Windsurf (HTTP)
 
 ```json
 {
   "mcpServers": {
     "spacefrontiers": {
       "url": "https://mcp.spacefrontiers.org",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
+      "headers": { "Authorization": "Bearer YOUR_API_KEY" }
     }
   }
 }
 ```
 
-### AI Agent Install
+Get an API key at https://spacefrontiers.org/keys.
 
-Tell your AI agent: *"Install the Space Frontiers MCP from https://spacefrontiers.org/install.md"*
+### Self-hosted (stdio)
 
-## OAuth 2.0
+```sh
+git clone https://github.com/SpaceFrontiers/mcp.git
+cd mcp
+uv sync
+SPACE_FRONTIERS_API_KEY=sf_live_xxx uv run fastmcp run mcp_server.py
+```
 
-The server supports OAuth 2.0 with PKCE for automatic authentication. Discovery endpoints:
+## Repository layout
 
-- `GET /.well-known/oauth-protected-resource` — resource metadata
-- `GET /.well-known/oauth-authorization-server` — authorization server metadata
+- `mcp_server.py` — Starlette + FastMCP entrypoint, OAuth well-known endpoints.
+- `tools.py` — four tools with Pydantic output schemas.
+- `prompts.py` — `deep_research_agent` prompt.
+- `resources.py` — `spacefrontiers://document/{uri_b64}` URI template.
+- `auth.py` — Bearer-token validation, Origin allowlist, MCP-Protocol-Version check.
+- `client.py` — async HTTP client for the v2 search API.
+- `server.json` — Official MCP Registry entry.
+- `smithery.yaml` — Smithery deployment config.
+- `registry.json` — in-house registry metadata.
+- `tests/` — pytest unit tests.
 
-The authorization, token, and registration endpoints are on `spacefrontiers.org/api/oauth/`.
+## Spec compliance
 
-## Billing
+- **Transport**: Streamable HTTP, stateless.
+- **Auth**: OAuth 2.1 with RFC 7591 Dynamic Client Registration; long-lived API keys also accepted.
+- **Annotations**: every tool declares `readOnlyHint`, `idempotentHint`, `openWorldHint`, `destructiveHint:false`.
+- **Output schemas**: every tool's `outputSchema` is auto-generated from a Pydantic return model.
+- **Resources**: one URI template registered for documents.
+- **Spec versions accepted**: `2025-03-26`, `2025-06-18`, `2025-11-25`.
 
-When your balance is too low, tools return a message with a link to add credits at [spacefrontiers.org/payments](https://spacefrontiers.org/payments). Searches cost ~$0.005, fetches ~$0.01.
+## Development
 
-## Links
+```sh
+uv sync
+uv run pytest
+uv run ruff check .
+```
 
-- **Documentation:** [spacefrontiers.org/mcp](https://spacefrontiers.org/mcp)
-- **API Keys:** [spacefrontiers.org/keys](https://spacefrontiers.org/keys)
-- **Add Credits:** [spacefrontiers.org/payments](https://spacefrontiers.org/payments)
+mcp-name: io.github.spacefrontiers/mcp
+
+## License
+
+MIT
