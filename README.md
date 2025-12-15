@@ -87,7 +87,7 @@ uv run pytest
 uv run ruff check .
 ```
 
-mcp-name: io.github.spacefrontiers/mcp
+mcp-name: io.github.SpaceFrontiers/mcp
 
 ## License
 
