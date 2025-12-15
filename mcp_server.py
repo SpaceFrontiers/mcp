@@ -17,9 +17,12 @@ from prompts import setup_prompts
 from resources import setup_resources
 from tools import setup_tools
 
-# Single source of truth for public URLs (overridable for staging/dev)
+# Single source of truth for public URLs (overridable for staging/dev).
+# OAuth runs on api.spacefrontiers.org (no Cloudflare JS challenge for
+# programmatic clients); the consent UI runs on spacefrontiers.org (browser).
 MCP_PUBLIC_URL = os.environ.get('MCP_PUBLIC_URL', 'https://mcp.spacefrontiers.org')
 SF_PUBLIC_URL = os.environ.get('SF_PUBLIC_URL', 'https://spacefrontiers.org')
+SF_API_PUBLIC_URL = os.environ.get('SF_API_PUBLIC_URL', 'https://api.spacefrontiers.org')
 
 
 @dataclass
@@ -75,11 +78,11 @@ mcp = FastMCP(
 # -----------------------------------------------------------------------
 
 OAUTH_METADATA = {
-    'issuer': SF_PUBLIC_URL,
+    'issuer': SF_API_PUBLIC_URL,
     'authorization_endpoint': f'{SF_PUBLIC_URL}/oauth/authorize',
-    'token_endpoint': f'{SF_PUBLIC_URL}/api/oauth/token',
-    'registration_endpoint': f'{SF_PUBLIC_URL}/api/oauth/register',
-    'revocation_endpoint': f'{SF_PUBLIC_URL}/api/oauth/revoke',
+    'token_endpoint': f'{SF_API_PUBLIC_URL}/v2/oauth/token',
+    'registration_endpoint': f'{SF_API_PUBLIC_URL}/v2/oauth/register',
+    'revocation_endpoint': f'{SF_API_PUBLIC_URL}/v2/oauth/revoke',
     'response_types_supported': ['code'],
     'grant_types_supported': ['authorization_code', 'refresh_token'],
     'code_challenge_methods_supported': ['S256'],
@@ -90,7 +93,7 @@ OAUTH_METADATA = {
 
 OAUTH_PROTECTED_RESOURCE = {
     'resource': MCP_PUBLIC_URL,
-    'authorization_servers': [SF_PUBLIC_URL],
+    'authorization_servers': [SF_API_PUBLIC_URL],
     'bearer_methods_supported': ['header'],
     'scopes_supported': ['search'],
 }
