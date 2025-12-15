@@ -11,13 +11,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 from client import AuthenticationError, InsufficientFundsError
 from tools import (
     DocumentPassages,
     FullDocument,
     SearchResults,
-    ToolError,
     setup_tools,
 )
 
@@ -255,12 +255,12 @@ async def test_fetch_document_truncates_long_content():
 
 
 @pytest.mark.asyncio
-async def test_fetch_document_missing_returns_tool_error():
+async def test_fetch_document_missing_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(fetch_return=None)
     fn = _tool_fn(mcp, 'spacefrontiers_fetch_document')
-    result = await fn(ctx=ctx, uri='https://doi.org/10.1234/missing')
-    assert isinstance(result, ToolError)
-    assert result.error == 'not_found'
+    with pytest.raises(ToolError) as exc:
+        await fn(ctx=ctx, uri='https://doi.org/10.1234/missing')
+    assert 'No document with URI' in str(exc.value)
 
 
 # ---------------------------------------------------------------------------
@@ -325,23 +325,23 @@ async def test_search_in_document_falls_back_to_full_when_no_passages():
 
 
 @pytest.mark.asyncio
-async def test_insufficient_funds_returns_tool_error():
+async def test_insufficient_funds_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(search_side_effect=InsufficientFundsError())
     fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
-    result = await fn(ctx=ctx, query='anything')
-    assert isinstance(result, ToolError)
-    assert result.error == 'insufficient_funds'
-    assert 'spacefrontiers.org/payments' in result.next_step_url
+    with pytest.raises(ToolError) as exc:
+        await fn(ctx=ctx, query='anything')
+    assert 'Insufficient funds' in str(exc.value)
+    assert 'spacefrontiers.org/payments' in str(exc.value)
 
 
 @pytest.mark.asyncio
-async def test_authentication_error_returns_tool_error():
+async def test_authentication_error_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(search_side_effect=AuthenticationError())
     fn = _tool_fn(mcp, 'spacefrontiers_search_social')
-    result = await fn(ctx=ctx, query='anything')
-    assert isinstance(result, ToolError)
-    assert result.error == 'unauthenticated'
-    assert 'spacefrontiers.org/keys' in result.next_step_url
+    with pytest.raises(ToolError) as exc:
+        await fn(ctx=ctx, query='anything')
+    assert 'Authentication failed' in str(exc.value)
+    assert 'spacefrontiers.org/keys' in str(exc.value)
 
 
 # ---------------------------------------------------------------------------
