@@ -22,13 +22,31 @@ from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field
 
-from client import MAX_CONTENT_LENGTH, AuthenticationError, InsufficientFundsError
+from client import (
+    DEFAULT_CONTENT_LENGTH,
+    MAX_CONTENT_LENGTH,
+    AuthenticationError,
+    InsufficientFundsError,
+)
 
 logger = logging.getLogger(__name__)
 
 # Rough token estimate exposed to agents in `content_size_tokens`. Matches the
 # heuristic agents themselves use to plan whether a doc fits in context.
 _CHARS_PER_TOKEN = 4
+_MAX_SEARCH_ABSTRACT_LENGTH = 800
+_MAX_SEARCH_SNIPPET_LENGTH = 900
+_MAX_FETCH_ABSTRACT_LENGTH = 4_000
+_MAX_PASSAGE_LENGTH = 2_000
+_MAX_PASSAGES = 5
+_MAX_AUTHORS = 16
+_MAX_URIS = 12
+_MAX_REFERENCES = 50
+_MAX_TAGS = 25
+_MAX_LANGUAGES = 12
+_MAX_REFERENCED_BY = 20
+_MAX_SEARCH_WINDOW = 500
+_MAX_QUERY_LENGTH = 16 * 1024
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +57,7 @@ _CHARS_PER_TOKEN = 4
 class DocumentResult(BaseModel):
     """One hit in a search result list. `source_uri` is the canonical URI to cite."""
 
+    id: str = ''
     title: str
     source_uri: str = Field(
         description='Canonical URI for citation (DOI URL when available, else first http URI, else first scheme URI).',
@@ -46,14 +65,14 @@ class DocumentResult(BaseModel):
     uris: list[str] = Field(default_factory=list, description='All known URIs for this document.')
     score: float
     snippet: str | None = Field(default=None, description='Best-matching text excerpt for this query.')
+    snippet_field: str | None = Field(default=None, description='Field that supplied the excerpt.')
     abstract: str | None = None
     authors: list[str] = Field(default_factory=list)
     issued_at: int | None = Field(default=None, description='Unix timestamp (seconds, UTC).')
     issued_date: str | None = Field(default=None, description='Human-readable date.')
-    content_size_tokens: int | None = Field(
-        default=None, description='Approximate full-text length in tokens.'
-    )
+    content_size_tokens: int | None = Field(default=None, description='Approximate full-text length in tokens.')
     document_type: str | None = None
+    publisher: str | None = None
 
 
 class SearchResults(BaseModel):
@@ -62,11 +81,11 @@ class SearchResults(BaseModel):
     query: str
     index: Literal['documents', 'social']
     hits: list[DocumentResult]
-    total: int | None = Field(
-        default=None, description='Total matching documents if known; null if unbounded.'
-    )
-    next_cursor: str | None = Field(
-        default=None, description='Opaque cursor for the next page; null if no more results.'
+    count: int
+    total: int | None = Field(default=None, description='Total matching documents if known; null if unbounded.')
+    has_more: bool
+    next_offset: int | None = Field(
+        default=None, description='Pass as `offset` to retrieve the next page; null if complete.'
     )
 
 
@@ -79,13 +98,15 @@ class DocumentReference(BaseModel):
 class FullDocument(BaseModel):
     """Full text + metadata + reference list for one document."""
 
+    id: str = ''
     title: str
     source_uri: str
     uris: list[str] = Field(default_factory=list)
     abstract: str | None = None
+    abstract_truncated: bool = False
     content: str | None = Field(
         default=None,
-        description=f'Full text, truncated to ~{MAX_CONTENT_LENGTH:,} characters when longer.',
+        description=f'Full text, capped by `max_chars` (up to {MAX_CONTENT_LENGTH:,} characters).',
     )
     content_truncated: bool = False
     full_content_length: int | None = Field(
@@ -94,19 +115,25 @@ class FullDocument(BaseModel):
     authors: list[str] = Field(default_factory=list)
     issued_at: int | None = None
     issued_date: str | None = None
+    document_type: str | None = None
+    publisher: str | None = None
     languages: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     references: list[DocumentReference] = Field(default_factory=list)
+    references_truncated: bool = False
+    full_reference_count: int = 0
     referenced_by: list[DocumentResult] = Field(default_factory=list)
 
 
 class PassageMatch(BaseModel):
     text: str
     score: float
-    field: str | None = Field(
-        default=None,
+    field: str = Field(
+        default='content',
         description='Which document field the passage came from (content, abstract, ...).',
     )
+    chunk_id: int | None = Field(default=None, description='Stable chunk ordinal when available.')
+    truncated: bool = False
 
 
 class DocumentPassages(BaseModel):
@@ -115,10 +142,10 @@ class DocumentPassages(BaseModel):
     source_uri: str
     title: str | None = None
     passages: list[PassageMatch]
-    referenced_by: list[DocumentResult] = Field(default_factory=list)
-    fallback_full_document: FullDocument | None = Field(
+    passage_count: int
+    message: str | None = Field(
         default=None,
-        description='If no passages matched, the full document is returned here as a fallback.',
+        description='Actionable guidance when no passage matched.',
     )
 
 
@@ -134,7 +161,7 @@ class DocumentPassages(BaseModel):
 _INSUFFICIENT_FUNDS_MSG = (
     'Insufficient funds. Your Space Frontiers balance is too low for this request. '
     'Top up at https://spacefrontiers.org/payments?amount=10. '
-    'Searches cost ~$0.005, fetches ~$0.005 — $10 buys ~2,000 calls.'
+    'Search costs $0.01 + $0.001 per returned result; document fetches cost $0.05.'
 )
 
 _AUTH_ERROR_MSG = (
@@ -174,14 +201,28 @@ def _canonical_uri(uris: list[str]) -> str:
     return uris[0] if uris else ''
 
 
-def _format_authors(authors: list[dict[str, Any]]) -> list[str]:
+def _truncate(text: str, maximum: int) -> tuple[str, bool]:
+    """Bound a string by Unicode characters and report whether it was shortened."""
+    if len(text) <= maximum:
+        return text, False
+    return text[:maximum], True
+
+
+def _format_authors(authors: list[Any]) -> list[str]:
     out: list[str] = []
-    for a in authors[:25]:
-        if 'name' in a:
-            out.append(a['name'])
-        elif 'family' in a:
-            given = a.get('given', '')
-            out.append(f'{a["family"]}, {given}' if given else a['family'])
+    for author in authors[:_MAX_AUTHORS]:
+        if isinstance(author, str):
+            name = author.strip()
+        elif isinstance(author, dict):
+            name = str(author.get('name') or '').strip()
+            if not name:
+                given = str(author.get('given') or '').strip()
+                family = str(author.get('family') or '').strip()
+                name = ' '.join(part for part in (given, family) if part)
+        else:
+            name = ''
+        if name:
+            out.append(name)
     return out
 
 
@@ -189,7 +230,10 @@ def _format_date(ts: int | None) -> str | None:
     if ts is None:
         return None
     from datetime import datetime, timezone
+
     try:
+        if abs(int(ts)) > 100_000_000_000:
+            ts = int(ts) // 1_000
         return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime('%Y-%m-%d')
     except (ValueError, TypeError, OSError):
         return None
@@ -197,54 +241,155 @@ def _format_date(ts: int | None) -> str | None:
 
 def _hit_to_result(item: dict[str, Any]) -> DocumentResult:
     doc = item.get('document') or {}
-    uris = doc.get('uris') or []
+    uris = [str(uri) for uri in (doc.get('uris') or [])[:_MAX_URIS]]
     snippets = item.get('snippets') or []
-    snippet = next((s.get('text', '').strip() for s in snippets if s.get('text')), None)
+    snippet_data = next((s for s in snippets if str(s.get('text') or '').strip()), None)
+    snippet = None
+    snippet_field = None
+    if snippet_data:
+        snippet = _truncate(str(snippet_data.get('text')).strip(), _MAX_SEARCH_SNIPPET_LENGTH)[0]
+        snippet_field = str(snippet_data.get('field') or 'content')
+    abstract = str(doc.get('abstract') or '').strip()
+    abstract = _truncate(abstract, _MAX_SEARCH_ABSTRACT_LENGTH)[0] or None
     content_length = doc.get('content_length') or 0
+    metadata = doc.get('metadata') if isinstance(doc.get('metadata'), dict) else {}
     return DocumentResult(
+        id=str(item.get('id') or doc.get('id') or ''),
         title=doc.get('title') or 'Untitled',
         source_uri=_canonical_uri(uris),
         uris=uris,
         score=float(item.get('score', 0.0)),
         snippet=snippet,
-        abstract=doc.get('abstract'),
+        snippet_field=snippet_field,
+        abstract=abstract,
         authors=_format_authors(doc.get('authors') or []),
         issued_at=doc.get('issued_at'),
         issued_date=_format_date(doc.get('issued_at')),
-        content_size_tokens=(content_length // _CHARS_PER_TOKEN) if content_length else None,
+        content_size_tokens=(
+            (int(content_length) + _CHARS_PER_TOKEN - 1) // _CHARS_PER_TOKEN if content_length else None
+        ),
         document_type=doc.get('type'),
+        publisher=metadata.get('publisher'),
     )
 
 
-def _doc_to_full(data: dict[str, Any], referenced_by: list[DocumentResult]) -> FullDocument:
-    uris = data.get('uris') or []
+def _doc_to_full(
+    data: dict[str, Any],
+    referenced_by: list[DocumentResult],
+    max_chars: int,
+) -> FullDocument:
     doc = data.get('document') or {}
-    content = doc.get('content') or ''
-    truncated = len(content) > MAX_CONTENT_LENGTH
+    uris = [str(uri) for uri in (data.get('uris') or doc.get('uris') or [])[:_MAX_URIS]]
+    content = str(doc.get('content') or '')
+    upstream_truncated = bool(doc.get('content_truncated'))
+    bounded_content, locally_truncated = _truncate(content, max_chars)
+    raw_abstract = str(doc.get('abstract') or '').strip()
+    abstract, abstract_truncated = _truncate(raw_abstract, _MAX_FETCH_ABSTRACT_LENGTH)
+    metadata = doc.get('metadata') if isinstance(doc.get('metadata'), dict) else {}
+    raw_refs = doc.get('references') or []
     refs = []
-    for ref in (doc.get('references') or [])[:100]:
-        ref_uris = ref.get('uris') or []
+    for ref in raw_refs[:_MAX_REFERENCES]:
+        ref_uris = [str(uri) for uri in (ref.get('uris') or [])[:_MAX_URIS]]
         doi = ref.get('doi') or None
-        refs.append(DocumentReference(
-            title=ref.get('title'),
-            source_uri=_canonical_uri(ref_uris) or (f'https://doi.org/{doi.lower()}' if doi else None),
-            doi=doi,
-        ))
+        refs.append(
+            DocumentReference(
+                title=ref.get('title'),
+                source_uri=_canonical_uri(ref_uris) or (f'https://doi.org/{doi.lower()}' if doi else None),
+                doi=doi,
+            )
+        )
+    known_content_length = doc.get('content_length')
+    if known_content_length is None and not upstream_truncated:
+        known_content_length = len(content)
     return FullDocument(
+        id=str(data.get('id') or doc.get('id') or ''),
         title=doc.get('title') or 'Untitled',
         source_uri=_canonical_uri(uris),
         uris=uris,
-        abstract=doc.get('abstract'),
-        content=content[:MAX_CONTENT_LENGTH] if content else None,
-        content_truncated=truncated,
-        full_content_length=len(content) if content else None,
+        abstract=abstract or None,
+        abstract_truncated=abstract_truncated,
+        content=bounded_content or None,
+        content_truncated=upstream_truncated or locally_truncated,
+        full_content_length=int(known_content_length) if known_content_length is not None else None,
         authors=_format_authors(doc.get('authors') or []),
         issued_at=doc.get('issued_at'),
         issued_date=_format_date(doc.get('issued_at')),
-        languages=doc.get('languages') or [],
-        tags=(doc.get('tags') or [])[:25],
+        document_type=doc.get('type'),
+        publisher=metadata.get('publisher'),
+        languages=(doc.get('languages') or [])[:_MAX_LANGUAGES],
+        tags=(doc.get('tags') or [])[:_MAX_TAGS],
         references=refs,
+        references_truncated=len(raw_refs) > _MAX_REFERENCES,
+        full_reference_count=len(raw_refs),
         referenced_by=referenced_by,
+    )
+
+
+def _search_results(
+    query: str,
+    index: Literal['documents', 'social'],
+    offset: int,
+    data: dict[str, Any],
+) -> SearchResults:
+    hits = [_hit_to_result(item) for item in (data.get('hits') or [])]
+    has_more = bool(data.get('has_next'))
+    return SearchResults(
+        query=query,
+        index=index,
+        hits=hits,
+        count=len(hits),
+        total=data.get('total_hits'),
+        has_more=has_more,
+        next_offset=(offset + len(hits)) if has_more and hits else None,
+    )
+
+
+def _validate_date_range(after: int | None, before: int | None) -> None:
+    if after is not None and before is not None and after > before:
+        raise ToolError('filter_issued_after must not be later than filter_issued_before')
+
+
+def _normalize_uri(uri: str) -> str:
+    """Normalize common identifiers accepted by the hosted Rust server."""
+    value = uri.strip()
+    lowered = value.lower()
+    if lowered.startswith('https://doi.org/'):
+        return f'doi://{value[len("https://doi.org/") :].lower()}'
+    if lowered.startswith('http://doi.org/'):
+        return f'doi://{value[len("http://doi.org/") :].lower()}'
+    if lowered.startswith('doi://'):
+        return f'doi://{value[len("doi://") :].lower()}'
+    if lowered.startswith('doi:'):
+        return f'doi://{value[len("doi:") :].strip().lower()}'
+    if lowered.startswith('pmid:'):
+        return f'pubmed://{value[len("pmid:") :].strip()}'
+    if lowered.startswith('pubmed:'):
+        return f'pubmed://{value[len("pubmed:") :].lstrip("/").strip()}'
+    if lowered.startswith('arxiv:'):
+        return f'arxiv://{value[len("arxiv:") :].lstrip("/").strip().lower()}'
+    if lowered.startswith('isbn:'):
+        return f'isbn://{value[len("isbn:") :].lstrip("/").strip()}'
+    return value
+
+
+def _is_social_uri(uri: str) -> bool:
+    lowered = uri.lower()
+    return lowered.startswith(
+        (
+            'telegram://',
+            't.me://',
+            'reddit://',
+            'youtube://',
+            'yt://',
+            'discord://',
+            'https://t.me/',
+            'https://reddit.com/',
+            'https://www.reddit.com/',
+            'https://youtube.com/',
+            'https://www.youtube.com/',
+            'https://youtu.be/',
+            'https://discord.com/channels/',
+        )
     )
 
 
@@ -276,11 +421,7 @@ def _flatten_optional_unions(schema: Any) -> Any:
         any_of = schema.get('anyOf')
         if isinstance(any_of, list) and len(any_of) == 2:
             non_null = [s for s in any_of if s != {'type': 'null'}]
-            if (
-                len(non_null) == 1
-                and isinstance(non_null[0], dict)
-                and isinstance(non_null[0].get('type'), str)
-            ):
+            if len(non_null) == 1 and isinstance(non_null[0], dict) and isinstance(non_null[0].get('type'), str):
                 merged = {k: v for k, v in schema.items() if k != 'anyOf'}
                 # Merge sibling fields from the non-null arm (items, enum, etc.)
                 # but rewrite `type` as a [<X>, "null"] tuple so null stays
@@ -304,6 +445,7 @@ def _flatten_optional_unions_on(mcp: FastMCP) -> None:
     landed.
     """
     from fastmcp.tools.tool import Tool as _FastMCPTool
+
     for component in mcp.local_provider._components.values():
         if not isinstance(component, _FastMCPTool):
             continue
@@ -319,11 +461,19 @@ def setup_tools(mcp: FastMCP):
         int,
         Field(
             description=(
-                'Number of results to return. Use 20-30 for broad coverage on a single query; '
-                'smaller (5-10) when running many parallel queries.'
+                'Number of results to return. Keep 10 for normal agent use; '
+                'use 5 when issuing several parallel queries.'
             ),
             ge=1,
-            le=100,
+            le=30,
+        ),
+    ]
+    OffsetField = Annotated[
+        int,
+        Field(
+            description='Pagination offset. Use `next_offset` from a prior result.',
+            ge=0,
+            lt=_MAX_SEARCH_WINDOW,
         ),
     ]
     QueryField = Annotated[
@@ -333,6 +483,7 @@ def setup_tools(mcp: FastMCP):
                 'Free-text search query. Can be empty when filters alone are enough '
                 '(e.g. browse recent papers from one journal).'
             ),
+            max_length=_MAX_QUERY_LENGTH,
         ),
     ]
     IssuedAfter = Annotated[
@@ -359,7 +510,8 @@ def setup_tools(mcp: FastMCP):
     async def search_documents(
         ctx: Context,
         query: QueryField = '',
-        limit: LimitField = 30,
+        limit: LimitField = 10,
+        offset: OffsetField = 0,
         filter_issns: Annotated[
             list[str] | None,
             Field(
@@ -398,24 +550,31 @@ def setup_tools(mcp: FastMCP):
         - Pass an empty `query` plus `filter_issns` to browse recent issues of a specific journal.
         - Use the returned `source_uri` verbatim with `spacefrontiers_fetch_document` for full text.
         """
+        query = query.strip()
+        _validate_date_range(filter_issued_after, filter_issued_before)
+        if not query and not any(
+            (
+                filter_issns,
+                filter_types,
+                filter_issued_after is not None,
+                filter_issued_before is not None,
+            )
+        ):
+            raise ToolError('query may be empty only when at least one document filter is supplied')
+        if offset + limit > _MAX_SEARCH_WINDOW:
+            raise ToolError(f'offset + limit must not exceed {_MAX_SEARCH_WINDOW}')
         client = ctx.request_context.lifespan_context.search_client
         data = await client.search(
             query,
             limit=limit,
+            offset=offset,
             index_names=['documents'],
             filter_types=filter_types,
             filter_issns=filter_issns,
             filter_issued_after=filter_issued_after,
             filter_issued_before=filter_issued_before,
         )
-        hits = [_hit_to_result(item) for item in (data.get('hits') or [])]
-        return SearchResults(
-            query=query,
-            index='documents',
-            hits=hits,
-            total=data.get('total_hits'),
-            next_cursor=data.get('next_cursor'),
-        )
+        return _search_results(query, 'documents', offset, data)
 
     @mcp.tool(
         name='spacefrontiers_search_social',
@@ -425,7 +584,8 @@ def setup_tools(mcp: FastMCP):
     async def search_social(
         ctx: Context,
         query: QueryField = '',
-        limit: LimitField = 30,
+        limit: LimitField = 10,
+        offset: OffsetField = 0,
         filter_uri_prefixes: Annotated[
             list[str] | None,
             Field(
@@ -456,23 +616,29 @@ def setup_tools(mcp: FastMCP):
           chronologically (combine with `filter_issued_after` for a time window).
         - For broad topics, also call `spacefrontiers_search_documents` in parallel for grounded sources.
         """
+        query = query.strip()
+        _validate_date_range(filter_issued_after, filter_issued_before)
+        if not query and not any(
+            (
+                filter_uri_prefixes,
+                filter_issued_after is not None,
+                filter_issued_before is not None,
+            )
+        ):
+            raise ToolError('query may be empty only when at least one social filter is supplied')
+        if offset + limit > _MAX_SEARCH_WINDOW:
+            raise ToolError(f'offset + limit must not exceed {_MAX_SEARCH_WINDOW}')
         client = ctx.request_context.lifespan_context.search_client
         data = await client.search(
             query,
             limit=limit,
+            offset=offset,
             index_names=['social'],
             filter_uri_prefixes=filter_uri_prefixes,
             filter_issued_after=filter_issued_after,
             filter_issued_before=filter_issued_before,
         )
-        hits = [_hit_to_result(item) for item in (data.get('hits') or [])]
-        return SearchResults(
-            query=query,
-            index='social',
-            hits=hits,
-            total=data.get('total_hits'),
-            next_cursor=data.get('next_cursor'),
-        )
+        return _search_results(query, 'social', offset, data)
 
     @mcp.tool(
         name='spacefrontiers_fetch_document',
@@ -496,37 +662,62 @@ def setup_tools(mcp: FastMCP):
                     'pmid:38019072',
                     'isbn:9780262033848',
                 ],
+                max_length=_MAX_QUERY_LENGTH,
             ),
         ],
+        max_chars: Annotated[
+            int,
+            Field(
+                description='Maximum full-text characters returned. Raise only for broad context.',
+                ge=1_000,
+                le=MAX_CONTENT_LENGTH,
+            ),
+        ] = DEFAULT_CONTENT_LENGTH,
+        referenced_by_limit: Annotated[
+            int,
+            Field(
+                description=(
+                    'Citing documents to include. Zero avoids another billed search, its latency, and its payload.'
+                ),
+                ge=0,
+                le=_MAX_REFERENCED_BY,
+            ),
+        ] = 0,
     ) -> FullDocument:
         """Retrieve the full text, metadata, and references of one Space Frontiers document.
 
         Use when: you have a `source_uri` from a search hit and need the body to quote, summarize,
-        or extract structured facts; or you want to walk the citation graph via `references`
-        and `referenced_by`.
+        extract structured facts, or inspect its references.
 
         Do not use when: you have not yet found the document — call a `spacefrontiers_search_*`
         tool first to obtain a real `source_uri`. Do not guess DOIs.
 
-        Returns title, authors, abstract, content (truncated above ~100K chars), references with URIs,
-        and up to 30 `referenced_by` documents you can fetch next. For documents over ~20K tokens
-        prefer `spacefrontiers_search_in_document` to extract only the passages you need.
+        Returns title, authors, a bounded abstract and body, and up to 50 references with URIs.
+        Full text defaults to 40K characters and can be raised to 100K. Citation backlinks are
+        opt-in because they require another billed search. For documents over ~20K tokens prefer
+        `spacefrontiers_search_in_document` to extract only the passages you need.
 
         Examples: `https://doi.org/10.1038/s41586-023-06924-6`, `arxiv:2301.00001`, `pmid:38019072`.
         """
+        supplied_uri = uri
+        uri = _normalize_uri(uri)
         client = ctx.request_context.lifespan_context.search_client
-        doc, referenced_by_data = await asyncio.gather(
-            client.get_document_by_uri(uri),
-            client.find_referenced_by(uri, limit=30),
-        )
+        referenced_by_data: dict[str, Any] = {'hits': []}
+        if referenced_by_limit:
+            doc, referenced_by_data = await asyncio.gather(
+                client.get_document_by_uri(uri),
+                client.find_referenced_by(uri, limit=referenced_by_limit),
+            )
+        else:
+            doc = await client.get_document_by_uri(uri)
         if doc is None:
             raise ToolError(
-                f'No document with URI {uri!r}. The DOI may not yet be in our corpus — '
+                f'No document with URI {supplied_uri!r}. The DOI may not yet be in our corpus — '
                 'crawls of newly cited DOIs are queued in the background; retry in a few minutes. '
                 'For non-academic sources, try `spacefrontiers_search_social`.'
             )
         referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
-        return _doc_to_full(doc, referenced_by)
+        return _doc_to_full(doc, referenced_by, max_chars)
 
     @mcp.tool(
         name='spacefrontiers_search_in_document',
@@ -537,11 +728,18 @@ def setup_tools(mcp: FastMCP):
         ctx: Context,
         uri: Annotated[
             str,
-            Field(description='Canonical URI of the document. Copy verbatim from a search hit; do NOT guess.'),
+            Field(
+                description='Canonical URI of the document. Copy verbatim from a search hit; do NOT guess.',
+                max_length=_MAX_QUERY_LENGTH,
+            ),
         ],
         query: Annotated[
             str,
-            Field(description='Text query for the passages you want to find inside this document.'),
+            Field(
+                description='Specific evidence to locate inside this document.',
+                min_length=1,
+                max_length=_MAX_QUERY_LENGTH,
+            ),
         ],
     ) -> DocumentPassages:
         """Find specific passages inside one Space Frontiers document without reading the whole body.
@@ -554,49 +752,69 @@ def setup_tools(mcp: FastMCP):
         `spacefrontiers_fetch_document` instead. Do not call this without first obtaining a
         real URI via search.
 
-        If no passage matches the query, the full document is returned in `fallback_full_document`
-        so the caller never has to retry with a second tool call.
+        Returns no more than five passages of 2K characters each. If no passage
+        matches, returns an empty list with guidance instead of unexpectedly
+        injecting the whole document into the agent context.
         """
+        supplied_uri = uri
+        uri = _normalize_uri(uri)
+        query = query.strip()
+        if not query:
+            raise ToolError('query must be a non-empty string')
         client = ctx.request_context.lifespan_context.search_client
-        snippets_data, referenced_by_data = await asyncio.gather(
-            client.get_document_by_uri(uri, text_filter=query),
-            client.find_referenced_by(uri, limit=30),
-        )
-        if snippets_data is None:
-            raise ToolError(
-                f'No document with URI {uri!r}. Confirm the URI via search first.'
+        if _is_social_uri(uri):
+            snippets_data = await client.search(
+                query,
+                limit=1,
+                index_names=['social'],
+                filter_uri_prefixes=[uri],
             )
+        else:
+            snippets_data = await client.get_document_by_uri(uri, text_filter=query)
+        if snippets_data is None:
+            raise ToolError(f'No document with URI {supplied_uri!r}. Confirm the URI via search first.')
 
         passages: list[PassageMatch] = []
-        for hit in (snippets_data.get('hits') or []):
+        seen: set[str] = set()
+        for hit in snippets_data.get('hits') or []:
             for s in hit.get('snippets') or []:
-                text = (s.get('text') or '').strip()
-                if text:
-                    passages.append(PassageMatch(
+                raw_text = str(s.get('text') or '').strip()
+                if not raw_text or raw_text in seen:
+                    continue
+                seen.add(raw_text)
+                text, truncated = _truncate(raw_text, _MAX_PASSAGE_LENGTH)
+                passages.append(
+                    PassageMatch(
                         text=text,
                         score=float(s.get('score', 0.0)),
-                        field=s.get('field'),
-                    ))
-
-        referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
+                        field=str(s.get('field') or 'content'),
+                        chunk_id=s.get('chunk_id'),
+                        truncated=truncated,
+                    )
+                )
+                if len(passages) == _MAX_PASSAGES:
+                    break
+            if len(passages) == _MAX_PASSAGES:
+                break
 
         # Resolve title + canonical URI from the first hit's document, falling back to the input URI.
         first_doc = next(((h.get('document') or {}) for h in (snippets_data.get('hits') or [])), {})
         title = first_doc.get('title')
         canonical = _canonical_uri(snippets_data.get('uris') or first_doc.get('uris') or [uri])
 
-        fallback: FullDocument | None = None
-        if not passages:
-            full = await client.get_document_by_uri(uri)
-            if full is not None:
-                fallback = _doc_to_full(full, referenced_by)
-
         return DocumentPassages(
             source_uri=canonical or uri,
             title=title,
             passages=passages,
-            referenced_by=referenced_by,
-            fallback_full_document=fallback,
+            passage_count=len(passages),
+            message=(
+                None
+                if passages
+                else (
+                    'No matching passages were found. Refine the query or use '
+                    'spacefrontiers_fetch_document for broader context.'
+                )
+            ),
         )
 
     # Pydantic emits Optional fields as `{"anyOf": [<type>, {"type": "null"}]}`.

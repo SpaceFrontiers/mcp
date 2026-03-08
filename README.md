@@ -1,6 +1,6 @@
 # Space Frontiers MCP Server
 
-A retrieval layer for AI agents over peer-reviewed papers, books, patents, Wikipedia, Reddit, Telegram, and YouTube. Returns full text and canonical source URIs for citation.
+A retrieval layer for AI agents over peer-reviewed papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Returns bounded full text and canonical source URIs for citation.
 
 Hosted at **https://mcp.spacefrontiers.org/** (Streamable HTTP transport, OAuth 2.1 with PKCE or Bearer API key).
 
@@ -16,10 +16,10 @@ All four tools are read-only, idempotent, and prefixed `spacefrontiers_` to avoi
 |------|-------------|
 | `spacefrontiers_search_documents` | Peer-reviewed papers, books, patents, Wikipedia. Use for citations and prior art. |
 | `spacefrontiers_search_social` | Reddit, Telegram channels, YouTube transcripts. Use for news and community discussion. |
-| `spacefrontiers_fetch_document` | Full text + references for one canonical URI (DOI, arXiv, PMID, ISBN). |
-| `spacefrontiers_search_in_document` | Passages within one document by query. Use for documents over ~20K tokens. |
+| `spacefrontiers_fetch_document` | Bounded full text + up to 50 references for one canonical URI. Defaults to 40K characters; supports up to 100K. |
+| `spacefrontiers_search_in_document` | Up to five matching passages within one document. Use for documents over ~20K tokens. |
 
-Every search hit includes `source_uri`, `score`, `snippet`, `authors`, `issued_date`, and `content_size_tokens` for typed parsing and citation.
+Search defaults to 10 compact, hybrid-ranked results and is capped at 30. Every hit includes a canonical `source_uri`, one snippet (up to 900 characters), an abstract preview (up to 800 characters), score, authors, date, type, and estimated full-text size. Citation backlinks are opt-in on `spacefrontiers_fetch_document` because they add another billed search.
 
 ## Install
 
@@ -28,7 +28,7 @@ The hosted server has its own [/mcp install page](https://spacefrontiers.org/mcp
 ### Claude Code (recommended)
 
 ```sh
-claude mcp add --transport http spacefrontiers https://mcp.spacefrontiers.org
+claude mcp add --transport http --scope user spacefrontiers https://mcp.spacefrontiers.org
 ```
 
 On first use a browser opens for OAuth login — no API key paste required.
@@ -39,6 +39,7 @@ On first use a browser opens for OAuth login — no API key paste required.
 {
   "mcpServers": {
     "spacefrontiers": {
+      "type": "http",
       "url": "https://mcp.spacefrontiers.org",
       "headers": { "Authorization": "Bearer YOUR_API_KEY" }
     }
@@ -56,6 +57,17 @@ cd mcp
 uv sync
 SPACE_FRONTIERS_API_KEY=sf_live_xxx uv run fastmcp run mcp_server.py
 ```
+
+The environment variable is used as the upstream API credential in stdio mode.
+
+## Pricing
+
+- Search: $0.01 base + $0.001 per returned result (the 10-result MCP default costs $0.02).
+- Full document fetch: $0.05.
+- In-document passage search: $0.015.
+- `referenced_by_limit > 0` on a fetch adds a separately billed search.
+
+Add credits at https://spacefrontiers.org/payments.
 
 ## Repository layout
 

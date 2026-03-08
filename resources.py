@@ -18,7 +18,8 @@ import logging
 
 from fastmcp import Context, FastMCP
 
-from tools import _doc_to_full, _hit_to_result
+from client import DEFAULT_CONTENT_LENGTH
+from tools import _doc_to_full, _normalize_uri
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ def setup_resources(mcp: FastMCP):
         uri='spacefrontiers://document/{uri_b64}',
         name='Space Frontiers document',
         description=(
-            'Full text + references for one Space Frontiers document. '
+            'Bounded full text + references for one Space Frontiers document. '
             'The {uri_b64} segment is the canonical document URI '
             '(DOI URL, arXiv URL, etc.) base64-url-encoded without padding.'
         ),
@@ -51,12 +52,13 @@ def setup_resources(mcp: FastMCP):
             logger.warning('Invalid uri_b64 token in resources/read: %s', uri_b64[:32])
             return json.dumps({'error': 'invalid_uri_token'})
 
+        uri = _normalize_uri(uri)
         client = ctx.request_context.lifespan_context.search_client
         doc = await client.get_document_by_uri(uri)
         if doc is None:
             return json.dumps({'error': 'not_found', 'uri': uri})
 
-        referenced_by_data = await client.find_referenced_by(uri, limit=30)
-        referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
-        full = _doc_to_full(doc, referenced_by)
+        # Keep resources/read bounded and single-request just like the default
+        # fetch tool. Citation backlinks remain an explicit tool opt-in.
+        full = _doc_to_full(doc, [], DEFAULT_CONTENT_LENGTH)
         return full.model_dump_json()

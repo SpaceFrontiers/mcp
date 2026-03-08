@@ -23,14 +23,16 @@ SUPPORTED_PROTOCOL_VERSIONS = frozenset({'2025-03-26', '2025-06-18', '2025-11-25
 
 # Origin allowlist for browser-mounted MCP clients. Non-browser clients (Claude
 # Code, fastmcp CLI, raw curl) do not send Origin and are allowed through.
-DEFAULT_ALLOWED_ORIGINS = frozenset({
-    'https://claude.ai',
-    'https://claude.com',
-    'https://chatgpt.com',
-    'https://cursor.com',
-    'https://spacefrontiers.org',
-    'null',
-})
+DEFAULT_ALLOWED_ORIGINS = frozenset(
+    {
+        'https://claude.ai',
+        'https://claude.com',
+        'https://chatgpt.com',
+        'https://cursor.com',
+        'https://spacefrontiers.org',
+        'null',
+    }
+)
 
 
 def _unauthorized(content: str, resource_url: str) -> Response:

@@ -28,13 +28,14 @@ All tool returns are typed Pydantic models — `outputSchema` and `structuredCon
 ## Local dev
 
 ```bash
-cd search/mcp
 uv sync
 uv run pytest
 uv run fastmcp run mcp_server.py
 ```
 
-The hosted endpoint expects `Authorization: Bearer <key>` and validates the token against `users-api`.
+The hosted endpoint expects `Authorization: Bearer <key>` and validates the
+token against `users-api`. Stdio/self-hosted use reads
+`SPACE_FRONTIERS_API_KEY` for upstream API authentication.
 
 ## Conventions
 

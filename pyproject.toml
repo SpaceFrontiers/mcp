@@ -1,7 +1,7 @@
 [project]
 name = "spacefrontiers-mcp"
-version = "0.2.0"
-description = "Space Frontiers MCP server — full-text retrieval over papers, books, patents, Wikipedia, Reddit, Telegram, YouTube."
+version = "0.3.0"
+description = "Space Frontiers MCP server — agent retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube."
 requires-python = ">=3.10,<4"
 dependencies = [
     "aiohttp>=3.11.0",
@@ -40,3 +40,6 @@ select = [
 [tool.ruff.format]
 quote-style = "single"
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -35,6 +35,7 @@ class FakeResponse:
 def mock_session():
     session = MagicMock()
     session.post = MagicMock(return_value=FakeResponse())
+    session.get = MagicMock(return_value=FakeResponse())
     return session
 
 
@@ -59,13 +60,44 @@ async def test_basic_search(client, mock_session):
     await client.search('quantum computing')
     body = _posted_body(mock_session)
     assert body['query'] == 'quantum computing'
-    assert body['mode'] == 'sparse'
-    assert body['limit'] == 30
+    assert 'mode' not in body
+    assert body['limit'] == 10
+    assert 'offset' not in body
     assert 'filter_issns' not in body
     assert 'filter_uri_prefixes' not in body
     assert 'filter_issued_after' not in body
     assert 'filter_issued_before' not in body
     assert 'filter_types' not in body
+
+
+@pytest.mark.asyncio
+async def test_search_passes_pagination_and_citation_filter(client, mock_session):
+    await client.search(
+        '',
+        limit=20,
+        offset=30,
+        index_names=['documents'],
+        referenced_by_uri='doi://10.1234/source',
+    )
+    body = _posted_body(mock_session)
+    assert body['limit'] == 20
+    assert body['offset'] == 30
+    assert body['referenced_by_uri'] == 'doi://10.1234/source'
+
+
+@pytest.mark.asyncio
+async def test_stdio_api_key_is_forwarded(client, mock_session, monkeypatch):
+    monkeypatch.setenv('SPACE_FRONTIERS_API_KEY', 'sf_test_example')
+    await client.search('test')
+    headers = mock_session.post.call_args.kwargs['headers']
+    assert headers['x-api-key'] == 'sf_test_example'
+
+
+@pytest.mark.asyncio
+async def test_document_uri_is_percent_encoded(client, mock_session):
+    await client.get_document_by_uri('https://doi.org/10.1234/example')
+    requested_url = mock_session.get.call_args.args[0]
+    assert requested_url.endswith('https%3A%2F%2Fdoi.org%2F10.1234%2Fexample')
 
 
 @pytest.mark.asyncio
