@@ -84,8 +84,6 @@ def format_referenced_by(data: dict[str, Any]) -> str:
         doc = item.get('document') or {}
         title = doc.get('title', 'Untitled')
         uris = doc.get('uris') or []
-        abstract = doc.get('abstract', '')
-        issued_at = doc.get('issued_at')
 
         display_uris = _format_uris(uris)
         uri_str = f' ({display_uris[0]})' if display_uris else ''
@@ -96,7 +94,6 @@ def format_referenced_by(data: dict[str, Any]) -> str:
 
 def format_document(data: dict[str, Any], max_content: int = 100_000) -> str:
     """Format a full document response as structured markdown."""
-    doc_id = data.get('id', '')
     uris = data.get('uris') or []
     doc = data.get('document') or {}
 
@@ -160,12 +157,9 @@ def format_document(data: dict[str, Any], max_content: int = 100_000) -> str:
     return '\n'.join(parts)
 
 
-_HIDDEN_PREFIXES = ('libgen://', 'libgen-rs://', 'libgen-gs://')
-
-
 def _format_uris(uris: list[str]) -> list[str]:
-    """Return deduplicated URIs. Prefer HTTP doi.org URLs, fall back to internal scheme URIs."""
-    deduped = list(dict.fromkeys(u for u in uris if not u.startswith(_HIDDEN_PREFIXES)))
+    """Return deduplicated URIs. Prefer HTTP doi.org URLs, fall back to scheme URIs."""
+    deduped = list(dict.fromkeys(uris))
     http = [u for u in deduped if u.startswith(('http://', 'https://'))]
     doi_urls = [u for u in http if 'doi.org/' in u]
     return doi_urls if doi_urls else (http if http else deduped)

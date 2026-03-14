@@ -5,8 +5,8 @@ import contextvars
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # Per-request auth headers captured by middleware, read by tool handlers
-auth_headers_var: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar(
-    'auth_headers', default={}
+auth_headers_var: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    'auth_headers', default=None
 )
 
 _AUTH_HEADER_NAMES = ('x-user-id', 'x-organization-id')
