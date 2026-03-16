@@ -7,9 +7,28 @@ from typing import Any
 
 import aiohttp
 
+from auth import auth_headers_var
+
 logger = logging.getLogger(__name__)
 
 MAX_CONTENT_LENGTH = 100_000
+
+
+class InsufficientFundsError(Exception):
+    """Raised when the user's balance is too low."""
+
+
+class AuthenticationError(Exception):
+    """Raised when authentication fails or API key is invalid."""
+
+
+def _check_response(resp: aiohttp.ClientResponse) -> None:
+    """Raise typed exceptions for billing/auth errors, or call raise_for_status."""
+    if resp.status == 402:
+        raise InsufficientFundsError()
+    if resp.status == 401:
+        raise AuthenticationError()
+    resp.raise_for_status()
 
 
 class SearchV2Client:
@@ -18,6 +37,16 @@ class SearchV2Client:
     def __init__(self, base_url: str, session: aiohttp.ClientSession):
         self._base_url = base_url.rstrip('/')
         self._session = session
+
+    def _get_headers(self) -> dict[str, str]:
+        """Read auth headers from the current request's ContextVar."""
+        headers: dict[str, str] = {}
+        auth = auth_headers_var.get()
+        if auth:
+            for key in ('x-user-id', 'x-organization-id'):
+                if value := auth.get(key):
+                    headers[key] = value
+        return headers
 
     # ------------------------------------------------------------------
     # Search
@@ -28,29 +57,26 @@ class SearchV2Client:
         query: str,
         *,
         limit: int = 30,
-        heap_factor: float = 0.7,
-        pruning: float = 0.8,
+        index_names: list[str] | None = None,
         filter_types: list[str] | None = None,
-        rerank: bool = False,
     ) -> dict[str, Any]:
         """POST /v2/search — sparse search with snippet extraction."""
         body: dict[str, Any] = {
             'query': query,
             'mode': 'sparse',
             'limit': limit,
-            'heap_factor': heap_factor,
-            'pruning': pruning,
         }
+        if index_names:
+            body['index_names'] = index_names
         if filter_types:
             body['filter_types'] = filter_types
-        if rerank:
-            body['rerank'] = True
 
         async with self._session.post(
             f'{self._base_url}/v2/search/',
             json=body,
+            headers=self._get_headers(),
         ) as resp:
-            resp.raise_for_status()
+            _check_response(resp)
             return await resp.json()
 
     # ------------------------------------------------------------------
@@ -72,8 +98,9 @@ class SearchV2Client:
         async with self._session.post(
             f'{self._base_url}/v2/search/',
             json=body,
+            headers=self._get_headers(),
         ) as resp:
-            resp.raise_for_status()
+            _check_response(resp)
             return await resp.json()
 
     # ------------------------------------------------------------------
@@ -93,8 +120,9 @@ class SearchV2Client:
         async with self._session.get(
             f'{self._base_url}/v2/search/documents/by-uri/{uri}',
             params=params,
+            headers=self._get_headers(),
         ) as resp:
             if resp.status == 404:
                 return None
-            resp.raise_for_status()
+            _check_response(resp)
             return await resp.json()
