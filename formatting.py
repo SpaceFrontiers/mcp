@@ -131,8 +131,7 @@ def format_document(data: dict[str, Any], max_content: int = 100_000) -> str:
     if content and max_content > 0:
         if len(content) > max_content:
             parts.append(
-                f'## Content (trimmed to {max_content:,} of {len(content):,} chars)\n\n'
-                f'{content[:max_content]}\n'
+                f'## Content (trimmed to {max_content:,} of {len(content):,} chars)\n\n{content[:max_content]}\n'
             )
         else:
             parts.append(f'## Content\n\n{content}\n')
