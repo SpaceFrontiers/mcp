@@ -47,7 +47,13 @@ mcp = FastMCP(
         'use it liberally. Send multiple parallel search queries with varied '
         'phrasings for better coverage. Fetch documents to read full content, '
         'follow reference URIs to explore the citation graph, and do additional '
-        'searches to build thorough research context.'
+        'searches to build thorough research context.\n\n'
+        'The corpus has two indexes: "documents" (papers, books, patents, Wikipedia) '
+        'and "social" (Reddit, Telegram, YouTube). For queries about news, events, '
+        'recent developments, announcements, or current discussions, ALWAYS search '
+        'the social index — either omit the source parameter to search both, or run '
+        'a dedicated search with source="social". Social sources often have the most '
+        'timely and relevant information for these topics.'
     ),
 )
 

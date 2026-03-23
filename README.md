@@ -6,7 +6,7 @@ MCP server that connects LLMs to Space Frontiers search. Query 170M+ academic pa
 
 | Tool | Description |
 |------|-------------|
-| **search** | Sparse vector search across 170M+ documents. Returns titles, URIs, scores, snippets. Filter by `"documents"` (papers, books, patents, Wikipedia) or `"social"` (Reddit, Telegram, YouTube). |
+| **search** | Sparse vector search across 170M+ documents. Returns titles, URIs, scores, snippets. Filter by `"documents"` (papers, books, patents, Wikipedia) or `"social"` (Reddit, Telegram, YouTube). For news, events, and current topics, always search social. |
 | **fetch** | Retrieve full document by URI — content, metadata, references, and citing documents. |
 | **search_in_document** | Find relevant passages within a single document using a text query. Ideal for large documents. |
 

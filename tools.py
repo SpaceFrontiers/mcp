@@ -30,7 +30,7 @@ Source = Literal['documents', 'social']
 INSUFFICIENT_FUNDS_MSG = (
     'Insufficient funds. Your Space Frontiers balance is too low for this request.\n\n'
     'Add credits: https://spacefrontiers.org/payments?amount=10\n\n'
-    'Pricing: searches cost ~$0.005, document fetches ~$0.01.\n'
+    'Pricing: searches cost ~$0.005, document fetches ~$0.005.\n'
     '$10 gives you approximately 2,000 searches.'
 )
 
@@ -78,8 +78,14 @@ def setup_tools(mcp: FastMCP):
                     '- "documents" — scholarly papers, books, patents, Wikipedia, '
                     'standards, manuals (use for scientific, factual, or technical queries)\n'
                     '- "social" — Reddit, Telegram, YouTube '
-                    '(use for opinions, discussions, news, community knowledge)\n'
-                    'Omit to search all sources.'
+                    '(use for opinions, discussions, community knowledge, news, '
+                    'events, announcements, and current developments)\n'
+                    'Omit to search all sources.\n\n'
+                    'IMPORTANT: For queries about news, events, recent developments, '
+                    'announcements, or anything time-sensitive, ALWAYS search social '
+                    '(either omit source or run a separate search with source="social"). '
+                    'Social sources often have the most current and relevant information '
+                    'for these topics.'
                 ),
             ),
         ] = None,
@@ -90,6 +96,7 @@ def setup_tools(mcp: FastMCP):
         - **documents**: academic papers (CrossRef, PubMed, arXiv), books, patents,
           Wikipedia, technical standards, and manuals.
         - **social**: Reddit posts/comments, Telegram channel messages, YouTube transcripts.
+          Social contains discussions, news, events, announcements, and community knowledge.
 
         Each result includes title, URIs (DOI, ISBN, arXiv, PubMed, etc.),
         a relevance score, and the best-matching text snippet.
@@ -100,6 +107,8 @@ def setup_tools(mcp: FastMCP):
           For example, instead of just "CRISPR gene editing", also try "cas9 genome
           engineering", "guide RNA targeting", etc.
         - Send several search calls in parallel for related queries and combine results.
+        - **For news, events, or current topics**, always include a search with
+          source="social" — social sources are often more timely and relevant.
         - Use URIs from results with ``fetch`` to read full documents and follow citations.
         - Use ``search_in_document`` to find specific passages within large documents.
         """
