@@ -8,18 +8,21 @@ A retrieval layer for AI agents over peer-reviewed papers, books, patents, stand
 
 Hosted at **https://mcp.machinelibrary.ai/** (Streamable HTTP transport, OAuth 2.1 with PKCE or Bearer API key).
 
+**Try a worked example:** [Find research, inspect supporting passages, and retain citations](examples/research-evidence.md).
+Includes exact tool calls and observations from a live run, plus a small evaluation checklist for research teams.
+
 <a href="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp/badge" alt="Machine Library MCP" />
 </a>
 
 ## Tools
 
-All four tools are read-only, idempotent, and prefixed `spacefrontiers_` to avoid collisions in multi-server agent setups.
+The four core retrieval tools below are read-only, idempotent, and prefixed `spacefrontiers_` to avoid collisions in multi-server agent setups. The hosted service may expose additional tools; inspect its current `tools/list`. In particular, the optional `spacefrontiers_top_up_balance` capability purchases prepaid credits and is not a read-only retrieval tool.
 
 | Tool | When to use |
 |------|-------------|
-| `spacefrontiers_search_documents` | Peer-reviewed papers, books, patents, Wikipedia. Use for citations and prior art. |
-| `spacefrontiers_search_social` | Reddit, Telegram channels, YouTube transcripts. Use for news and community discussion. |
+| `spacefrontiers_search_documents` | Papers, books, patents, standards, Wikipedia, YouTube transcripts. Use for citations and prior art. |
+| `spacefrontiers_search_social` | Reddit, Telegram channels, Discord. Use for news and community discussion. |
 | `spacefrontiers_fetch_document` | Bounded full text + up to 50 references for one canonical URI. Defaults to 40K characters; supports up to 100K. |
 | `spacefrontiers_search_in_document` | Up to five matching passages within one document. Use for documents over ~20K tokens. |
 
@@ -69,8 +72,9 @@ The internal default remains `http://search-api` for existing deployments.
 For HTTP deployments, set `SEARCH_API_ENDPOINT` to your trusted internal
 search API and `USERS_API_ENDPOINT` to your internal users API; the auth
 middleware forwards verified identity headers to that internal service.
-OAuth continues to use the Space Frontiers
-authorization server at `https://api.spacefrontiers.org` and the existing sign-in site.
+OAuth retains the compatible authorization-server issuer at
+`https://api.spacefrontiers.org`; browser sign-in for the new product uses
+`https://machinelibrary.ai` with the same accounts.
 
 ## Pricing
 

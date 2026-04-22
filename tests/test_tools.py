@@ -405,6 +405,39 @@ async def test_search_in_document_returns_passages():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'uri',
+    [
+        'youtube://video',
+        'yt://video',
+        'https://youtube.com/watch?v=video',
+        'https://www.youtube.com/watch?v=video',
+        'https://youtu.be/video',
+    ],
+)
+async def test_youtube_passages_use_document_lookup(uri):
+    mcp, client, ctx = _build_mcp_with_mocks(
+        fetch_return={
+            'uris': [uri],
+            'hits': [
+                {
+                    'document': {'title': 'Lecture', 'uris': [uri]},
+                    'snippets': [{'text': 'Lecture evidence', 'field': 'content', 'score': 1.0}],
+                }
+            ],
+        },
+    )
+    result = await _tool_fn(mcp, 'spacefrontiers_search_in_document')(
+        ctx=ctx,
+        uri=uri,
+        query='lecture evidence',
+    )
+    client.get_document_by_uri.assert_awaited_once_with(uri, text_filter='lecture evidence')
+    client.search.assert_not_awaited()
+    assert result.passages[0].text == 'Lecture evidence'
+
+
+@pytest.mark.asyncio
 async def test_search_in_document_does_not_fetch_full_body_when_no_passages():
     call_count = {'n': 0}
 

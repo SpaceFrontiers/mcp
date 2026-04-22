@@ -3,8 +3,8 @@
 Four tools, all read-only, all idempotent, all `spacefrontiers_*` namespaced
 to avoid collisions when multiple MCP servers are mounted in one agent:
 
-- spacefrontiers_search_documents   — search papers, books, patents, Wikipedia
-- spacefrontiers_search_social      — search Reddit, Telegram, YouTube
+- spacefrontiers_search_documents   — papers, books, patents, standards, Wikipedia, YouTube transcripts
+- spacefrontiers_search_social      — search Reddit, Telegram, Discord
 - spacefrontiers_fetch_document     — full text + references for one URI
 - spacefrontiers_search_in_document — passages within one document by query
 
@@ -379,15 +379,10 @@ def _is_social_uri(uri: str) -> bool:
             'telegram://',
             't.me://',
             'reddit://',
-            'youtube://',
-            'yt://',
             'discord://',
             'https://t.me/',
             'https://reddit.com/',
             'https://www.reddit.com/',
-            'https://youtube.com/',
-            'https://www.youtube.com/',
-            'https://youtu.be/',
             'https://discord.com/channels/',
         )
     )
@@ -504,7 +499,10 @@ def setup_tools(mcp: FastMCP):
 
     @mcp.tool(
         name='spacefrontiers_search_documents',
-        annotations={'title': 'Search papers, books, patents, Wikipedia', **_READ_ONLY_ANNOTATIONS},
+        annotations={
+            'title': 'Search papers, books, patents, Wikipedia, YouTube transcripts',
+            **_READ_ONLY_ANNOTATIONS,
+        },
     )
     @_handle_billing_errors
     async def search_documents(
@@ -533,7 +531,9 @@ def setup_tools(mcp: FastMCP):
         filter_issued_after: IssuedAfter = None,
         filter_issued_before: IssuedBefore = None,
     ) -> SearchResults:
-        """Search peer-reviewed papers, books, patents, and Wikipedia in the Space Frontiers `documents` index.
+        """Search papers, books, patents, standards, Wikipedia, and YouTube transcripts.
+
+        These sources belong to the Machine Library `documents` index.
 
         Use when: the user asks about scientific concepts, technical methods, prior art, citations,
         a DOI / ISBN / arXiv ID / PubMed ID, or wants peer-reviewed sources.
@@ -578,7 +578,7 @@ def setup_tools(mcp: FastMCP):
 
     @mcp.tool(
         name='spacefrontiers_search_social',
-        annotations={'title': 'Search Reddit, Telegram, YouTube', **_READ_ONLY_ANNOTATIONS},
+        annotations={'title': 'Search Reddit, Telegram, Discord', **_READ_ONLY_ANNOTATIONS},
     )
     @_handle_billing_errors
     async def search_social(
@@ -599,7 +599,7 @@ def setup_tools(mcp: FastMCP):
         filter_issued_after: IssuedAfter = None,
         filter_issued_before: IssuedBefore = None,
     ) -> SearchResults:
-        """Search Reddit, Telegram channels, and YouTube transcripts in the Space Frontiers `social` index.
+        """Search Reddit, Telegram channels, and Discord in the Machine Library `social` index.
 
         Use when: the user asks about news, recent events, announcements, ongoing discussions,
         community opinions, or anything time-sensitive that wouldn't be in peer-reviewed literature.

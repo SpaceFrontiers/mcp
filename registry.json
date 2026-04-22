@@ -17,11 +17,11 @@
   "tools": [
     {
       "name": "spacefrontiers_search_documents",
-      "description": "Search papers, books, patents, standards, and Wikipedia. Defaults to 10 compact, reranked hits."
+      "description": "Search papers, books, patents, standards, Wikipedia, and YouTube transcripts. Defaults to 10 compact, reranked hits."
     },
     {
       "name": "spacefrontiers_search_social",
-      "description": "Search Reddit, Telegram, Discord, and YouTube transcripts. Defaults to 10 compact, reranked hits."
+      "description": "Search Reddit, Telegram, and Discord. Defaults to 10 compact, reranked hits."
     },
     {
       "name": "spacefrontiers_fetch_document",
