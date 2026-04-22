@@ -12,7 +12,7 @@
   },
   "install": {
     "claude_code": "claude mcp add --transport http --scope user spacefrontiers https://mcp.machinelibrary.ai",
-    "instructions_url": "https://spacefrontiers.org/install.md"
+    "instructions_url": "https://machinelibrary.ai/install.md"
   },
   "tools": [
     {
@@ -39,12 +39,12 @@
     "fetch": "$0.05",
     "search_in_document": "$0.015",
     "free_tier": false,
-    "payment_url": "https://spacefrontiers.org/payments"
+    "payment_url": "https://machinelibrary.ai/payments"
   },
   "links": {
-    "website": "https://spacefrontiers.org",
-    "documentation": "https://spacefrontiers.org/mcp",
-    "pricing": "https://spacefrontiers.org/pricing",
+    "website": "https://machinelibrary.ai",
+    "documentation": "https://machinelibrary.ai/mcp",
+    "pricing": "https://machinelibrary.ai/pricing",
     "github": "https://github.com/SpaceFrontiers/mcp"
   }
 }
