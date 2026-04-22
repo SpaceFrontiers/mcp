@@ -1,7 +1,7 @@
 [project]
 name = "spacefrontiers-mcp"
-version = "0.3.0"
-description = "Space Frontiers MCP server — agent retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube."
+version = "0.3.1"
+description = "Machine Library MCP server — agent retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube."
 requires-python = ">=3.10,<4"
 dependencies = [
     "aiohttp>=3.11.0",

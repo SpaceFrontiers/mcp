@@ -1,10 +1,10 @@
-# AGENTS.md — Space Frontiers MCP server
+# AGENTS.md — Machine Library MCP server
 
-This is the source for the Space Frontiers MCP server, deployed at `https://mcp.spacefrontiers.org/`.
+This is the source for the Machine Library MCP server, deployed at `https://mcp.machinelibrary.ai/`.
 
 ## What it does
 
-Exposes four read-only, idempotent tools that wrap the Space Frontiers search API:
+Exposes four read-only, idempotent tools that wrap the Machine Library search API:
 
 - `spacefrontiers_search_documents` — peer-reviewed papers, books, patents, Wikipedia
 - `spacefrontiers_search_social` — Reddit, Telegram channels, YouTube transcripts
