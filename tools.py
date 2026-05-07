@@ -19,6 +19,7 @@ import logging
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context, FastMCP
+from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field
 
 from client import MAX_CONTENT_LENGTH, AuthenticationError, InsufficientFundsError
@@ -118,45 +119,37 @@ class DocumentPassages(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Error envelopes — returned in-band when billing/auth fail mid-tool-call
+# Error handling — raise FastMCP's ToolError on billing/auth failures so the
+# response carries `isError: true` per the MCP spec, with a single concrete
+# `outputSchema` for the success path (Smithery + similar UIs render this
+# cleanly; older "structured error envelope as a union arm" approach broke
+# their schema rendering).
 # ---------------------------------------------------------------------------
 
 
-class ToolError(BaseModel):
-    """In-band error result. Tool-level isError flag is set by FastMCP when this is returned."""
-
-    error: str
-    message: str
-    next_step_url: str | None = None
-
-
-INSUFFICIENT_FUNDS = ToolError(
-    error='insufficient_funds',
-    message=(
-        'Your Space Frontiers balance is too low for this request. '
-        'Searches cost ~$0.005, fetches ~$0.005. $10 buys ~2,000 searches.'
-    ),
-    next_step_url='https://spacefrontiers.org/payments?amount=10',
+_INSUFFICIENT_FUNDS_MSG = (
+    'Insufficient funds. Your Space Frontiers balance is too low for this request. '
+    'Top up at https://spacefrontiers.org/payments?amount=10. '
+    'Searches cost ~$0.005, fetches ~$0.005 — $10 buys ~2,000 calls.'
 )
 
-AUTH_ERROR = ToolError(
-    error='unauthenticated',
-    message='Your API key may be invalid or expired. Get a new key and update your MCP config.',
-    next_step_url='https://spacefrontiers.org/keys',
+_AUTH_ERROR_MSG = (
+    'Authentication failed. Your API key may be invalid or expired. '
+    'Get a new key at https://spacefrontiers.org/keys and update your MCP config.'
 )
 
 
 def _handle_billing_errors(fn):
-    """Catch billing/auth errors and surface them as in-band ToolError objects."""
+    """Translate billing/auth client exceptions to MCP `isError: true` results."""
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
         try:
             return await fn(*args, **kwargs)
-        except InsufficientFundsError:
-            return INSUFFICIENT_FUNDS
-        except AuthenticationError:
-            return AUTH_ERROR
+        except InsufficientFundsError as exc:
+            raise ToolError(_INSUFFICIENT_FUNDS_MSG) from exc
+        except AuthenticationError as exc:
+            raise ToolError(_AUTH_ERROR_MSG) from exc
 
     return wrapper
 
@@ -264,6 +257,38 @@ _READ_ONLY_ANNOTATIONS: dict[str, Any] = {
 }
 
 
+def _flatten_optional_unions(schema: Any) -> Any:
+    """Rewrite `{anyOf: [X, {type: null}]}` to X recursively.
+
+    Pydantic emits `Optional[T]` as a two-arm `anyOf` with the second arm being
+    `{"type": "null"}`. JSON Schema clients should accept that, but Smithery and
+    a few other directory UIs render it as "unknown". Collapsing the wrapper
+    keeps the field semantically optional (we still send `null` or omit it) and
+    gives the UIs a concrete type to render.
+    """
+    if isinstance(schema, dict):
+        any_of = schema.get('anyOf')
+        if isinstance(any_of, list) and len(any_of) == 2:
+            non_null = [s for s in any_of if s != {'type': 'null'}]
+            if len(non_null) == 1 and isinstance(non_null[0], dict):
+                merged = {k: v for k, v in schema.items() if k != 'anyOf'}
+                merged.update(non_null[0])
+                return _flatten_optional_unions(merged)
+        return {k: _flatten_optional_unions(v) for k, v in schema.items()}
+    if isinstance(schema, list):
+        return [_flatten_optional_unions(item) for item in schema]
+    return schema
+
+
+def _flatten_optional_unions_on(mcp: FastMCP) -> None:
+    """Apply `_flatten_optional_unions` to every registered tool's input + output schema."""
+    for tool in mcp._tool_manager._tools.values():
+        if tool.parameters:
+            tool.parameters = _flatten_optional_unions(tool.parameters)
+        if getattr(tool, 'output_schema', None):
+            tool.output_schema = _flatten_optional_unions(tool.output_schema)
+
+
 def setup_tools(mcp: FastMCP):
     # ----- shared filter parameter types -----
     LimitField = Annotated[
@@ -331,7 +356,7 @@ def setup_tools(mcp: FastMCP):
         ] = None,
         filter_issued_after: IssuedAfter = None,
         filter_issued_before: IssuedBefore = None,
-    ) -> SearchResults | ToolError:
+    ) -> SearchResults:
         """Search peer-reviewed papers, books, patents, and Wikipedia in the Space Frontiers `documents` index.
 
         Use when: the user asks about scientific concepts, technical methods, prior art, citations,
@@ -389,7 +414,7 @@ def setup_tools(mcp: FastMCP):
         ] = None,
         filter_issued_after: IssuedAfter = None,
         filter_issued_before: IssuedBefore = None,
-    ) -> SearchResults | ToolError:
+    ) -> SearchResults:
         """Search Reddit, Telegram channels, and YouTube transcripts in the Space Frontiers `social` index.
 
         Use when: the user asks about news, recent events, announcements, ongoing discussions,
@@ -449,7 +474,7 @@ def setup_tools(mcp: FastMCP):
                 ],
             ),
         ],
-    ) -> FullDocument | ToolError:
+    ) -> FullDocument:
         """Retrieve the full text, metadata, and references of one Space Frontiers document.
 
         Use when: you have a `source_uri` from a search hit and need the body to quote, summarize,
@@ -471,13 +496,10 @@ def setup_tools(mcp: FastMCP):
             client.find_referenced_by(uri, limit=30),
         )
         if doc is None:
-            return ToolError(
-                error='not_found',
-                message=(
-                    f'No document with URI {uri!r}. The DOI may not yet be in our corpus — '
-                    'crawls of newly cited DOIs are queued in the background; retry in a few minutes. '
-                    'For non-academic sources, try `spacefrontiers_search_social`.'
-                ),
+            raise ToolError(
+                f'No document with URI {uri!r}. The DOI may not yet be in our corpus — '
+                'crawls of newly cited DOIs are queued in the background; retry in a few minutes. '
+                'For non-academic sources, try `spacefrontiers_search_social`.'
             )
         referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
         return _doc_to_full(doc, referenced_by)
@@ -497,7 +519,7 @@ def setup_tools(mcp: FastMCP):
             str,
             Field(description='Text query for the passages you want to find inside this document.'),
         ],
-    ) -> DocumentPassages | ToolError:
+    ) -> DocumentPassages:
         """Find specific passages inside one Space Frontiers document without reading the whole body.
 
         Use when: the document is large (size > ~20K tokens shown in `content_size_tokens`)
@@ -517,9 +539,8 @@ def setup_tools(mcp: FastMCP):
             client.find_referenced_by(uri, limit=30),
         )
         if snippets_data is None:
-            return ToolError(
-                error='not_found',
-                message=f'No document with URI {uri!r}. Confirm the URI via search first.',
+            raise ToolError(
+                f'No document with URI {uri!r}. Confirm the URI via search first.'
             )
 
         passages: list[PassageMatch] = []
@@ -553,3 +574,9 @@ def setup_tools(mcp: FastMCP):
             referenced_by=referenced_by,
             fallback_full_document=fallback,
         )
+
+    # Pydantic emits Optional fields as `{"anyOf": [<type>, {"type": "null"}]}`.
+    # That's correct JSON Schema, but Smithery's UI (and some other directories)
+    # render it as "unknown" instead of the underlying type. Flatten every
+    # registered tool's input schema to a single concrete type per field.
+    _flatten_optional_unions_on(mcp)
