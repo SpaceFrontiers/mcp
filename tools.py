@@ -26,6 +26,10 @@ from client import MAX_CONTENT_LENGTH, AuthenticationError, InsufficientFundsErr
 
 logger = logging.getLogger(__name__)
 
+# Rough token estimate exposed to agents in `content_size_tokens`. Matches the
+# heuristic agents themselves use to plan whether a doc fits in context.
+_CHARS_PER_TOKEN = 4
+
 
 # ---------------------------------------------------------------------------
 # Output schemas — exposed via FastMCP-generated outputSchema/structuredContent
@@ -207,7 +211,7 @@ def _hit_to_result(item: dict[str, Any]) -> DocumentResult:
         authors=_format_authors(doc.get('authors') or []),
         issued_at=doc.get('issued_at'),
         issued_date=_format_date(doc.get('issued_at')),
-        content_size_tokens=(content_length // 4) if content_length else None,
+        content_size_tokens=(content_length // _CHARS_PER_TOKEN) if content_length else None,
         document_type=doc.get('type'),
     )
 

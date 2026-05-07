@@ -77,6 +77,8 @@ mcp = FastMCP(
 # OAuth 2.0 metadata endpoints (served without authentication)
 # -----------------------------------------------------------------------
 
+SUPPORTED_SCOPES = ['search']
+
 OAUTH_METADATA = {
     'issuer': SF_API_PUBLIC_URL,
     'authorization_endpoint': f'{SF_PUBLIC_URL}/oauth/authorize',
@@ -88,14 +90,14 @@ OAUTH_METADATA = {
     'code_challenge_methods_supported': ['S256'],
     'token_endpoint_auth_methods_supported': ['none'],
     'revocation_endpoint_auth_methods_supported': ['none'],
-    'scopes_supported': ['search'],
+    'scopes_supported': SUPPORTED_SCOPES,
 }
 
 OAUTH_PROTECTED_RESOURCE = {
     'resource': MCP_PUBLIC_URL,
     'authorization_servers': [SF_API_PUBLIC_URL],
     'bearer_methods_supported': ['header'],
-    'scopes_supported': ['search'],
+    'scopes_supported': SUPPORTED_SCOPES,
 }
 
 RESOURCE_METADATA_URL = f'{MCP_PUBLIC_URL}/.well-known/oauth-protected-resource'
