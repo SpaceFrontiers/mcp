@@ -15,7 +15,7 @@ configSchema:
     apiKey:
       type: string
       title: "Machine Library API key"
-      description: "Get a key at https://spacefrontiers.org/keys. Sent as `Authorization: Bearer <key>`."
+      description: "Get a key at https://machinelibrary.ai/keys. Sent as `Authorization: Bearer <key>`."
       x-from: header
       x-header-name: "Authorization"
       x-header-prefix: "Bearer "

@@ -1,12 +1,12 @@
 """MCP tools for Space Frontiers full-text retrieval.
 
-Four tools, all read-only, all idempotent, all `spacefrontiers_*` namespaced
+Four tools, all read-only, all idempotent, all `machinelibrary_*` namespaced
 to avoid collisions when multiple MCP servers are mounted in one agent:
 
-- spacefrontiers_search_documents   — papers, books, patents, standards, Wikipedia, YouTube transcripts
-- spacefrontiers_search_social      — search Reddit, Telegram, Discord
-- spacefrontiers_fetch_document     — full text + references for one URI
-- spacefrontiers_search_in_document — passages within one document by query
+- machinelibrary_search_documents   — papers, books, patents, standards, Wikipedia, YouTube transcripts
+- machinelibrary_search_social      — search Reddit, Telegram, Discord
+- machinelibrary_fetch_document     — full text + references for one URI
+- machinelibrary_search_in_document — passages within one document by query
 
 Every tool declares an `outputSchema` (via Pydantic return models) so calling
 LLMs can parse results structurally and cite by `source_uri` without parsing
@@ -160,13 +160,13 @@ class DocumentPassages(BaseModel):
 
 _INSUFFICIENT_FUNDS_MSG = (
     'Insufficient funds. Your Space Frontiers balance is too low for this request. '
-    'Top up at https://spacefrontiers.org/payments?amount=10. '
+    'Top up at https://machinelibrary.ai/payments?amount=10. '
     'Search costs $0.01 + $0.001 per returned result; document fetches cost $0.05.'
 )
 
 _AUTH_ERROR_MSG = (
     'Authentication failed. Your API key may be invalid or expired. '
-    'Get a new key at https://spacefrontiers.org/keys and update your MCP config.'
+    'Get a new key at https://machinelibrary.ai/keys and update your MCP config.'
 )
 
 
@@ -498,7 +498,7 @@ def setup_tools(mcp: FastMCP):
     ]
 
     @mcp.tool(
-        name='spacefrontiers_search_documents',
+        name='machinelibrary_search_documents',
         annotations={
             'title': 'Search papers, books, patents, Wikipedia, YouTube transcripts',
             **_READ_ONLY_ANNOTATIONS,
@@ -539,7 +539,7 @@ def setup_tools(mcp: FastMCP):
         a DOI / ISBN / arXiv ID / PubMed ID, or wants peer-reviewed sources.
 
         Do not use when: the question is about news, current events, ongoing discussions, or social
-        sentiment — call `spacefrontiers_search_social` instead. For general web pages or code,
+        sentiment — call `machinelibrary_search_social` instead. For general web pages or code,
         use a different MCP server.
 
         Examples: "crispr base editing efficiency", "doi:10.1038/s41586-023-06924-6",
@@ -548,7 +548,7 @@ def setup_tools(mcp: FastMCP):
         Tips:
         - Run 2-6 parallel queries with varied phrasings (synonyms, narrower/broader terms).
         - Pass an empty `query` plus `filter_issns` to browse recent issues of a specific journal.
-        - Use the returned `source_uri` verbatim with `spacefrontiers_fetch_document` for full text.
+        - Use the returned `source_uri` verbatim with `machinelibrary_fetch_document` for full text.
         """
         query = query.strip()
         _validate_date_range(filter_issued_after, filter_issued_before)
@@ -577,7 +577,7 @@ def setup_tools(mcp: FastMCP):
         return _search_results(query, 'documents', offset, data)
 
     @mcp.tool(
-        name='spacefrontiers_search_social',
+        name='machinelibrary_search_social',
         annotations={'title': 'Search Reddit, Telegram, Discord', **_READ_ONLY_ANNOTATIONS},
     )
     @_handle_billing_errors
@@ -605,7 +605,7 @@ def setup_tools(mcp: FastMCP):
         community opinions, or anything time-sensitive that wouldn't be in peer-reviewed literature.
 
         Do not use when: the question is about settled scientific knowledge, citations, or prior art —
-        call `spacefrontiers_search_documents` instead. For general web search, use a different
+        call `machinelibrary_search_documents` instead. For general web search, use a different
         MCP server.
 
         Examples: "openai gpt-5 release date", "site:reddit.com/r/LocalLLaMA quantization",
@@ -614,7 +614,7 @@ def setup_tools(mcp: FastMCP):
         Tips:
         - Pair an empty `query` with `filter_uri_prefixes` to browse a subreddit or Telegram channel
           chronologically (combine with `filter_issued_after` for a time window).
-        - For broad topics, also call `spacefrontiers_search_documents` in parallel for grounded sources.
+        - For broad topics, also call `machinelibrary_search_documents` in parallel for grounded sources.
         """
         query = query.strip()
         _validate_date_range(filter_issued_after, filter_issued_before)
@@ -641,7 +641,7 @@ def setup_tools(mcp: FastMCP):
         return _search_results(query, 'social', offset, data)
 
     @mcp.tool(
-        name='spacefrontiers_fetch_document',
+        name='machinelibrary_fetch_document',
         annotations={'title': 'Fetch full document by URI', **_READ_ONLY_ANNOTATIONS},
     )
     @_handle_billing_errors
@@ -689,13 +689,13 @@ def setup_tools(mcp: FastMCP):
         Use when: you have a `source_uri` from a search hit and need the body to quote, summarize,
         extract structured facts, or inspect its references.
 
-        Do not use when: you have not yet found the document — call a `spacefrontiers_search_*`
+        Do not use when: you have not yet found the document — call a `machinelibrary_search_*`
         tool first to obtain a real `source_uri`. Do not guess DOIs.
 
         Returns title, authors, a bounded abstract and body, and up to 50 references with URIs.
         Full text defaults to 40K characters and can be raised to 100K. Citation backlinks are
         opt-in because they require another billed search. For documents over ~20K tokens prefer
-        `spacefrontiers_search_in_document` to extract only the passages you need.
+        `machinelibrary_search_in_document` to extract only the passages you need.
 
         Examples: `https://doi.org/10.1038/s41586-023-06924-6`, `arxiv:2301.00001`, `pmid:38019072`.
         """
@@ -714,13 +714,13 @@ def setup_tools(mcp: FastMCP):
             raise ToolError(
                 f'No document with URI {supplied_uri!r}. The DOI may not yet be in our corpus — '
                 'crawls of newly cited DOIs are queued in the background; retry in a few minutes. '
-                'For non-academic sources, try `spacefrontiers_search_social`.'
+                'For non-academic sources, try `machinelibrary_search_social`.'
             )
         referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
         return _doc_to_full(doc, referenced_by, max_chars)
 
     @mcp.tool(
-        name='spacefrontiers_search_in_document',
+        name='machinelibrary_search_in_document',
         annotations={'title': 'Search passages within one document', **_READ_ONLY_ANNOTATIONS},
     )
     @_handle_billing_errors
@@ -749,7 +749,7 @@ def setup_tools(mcp: FastMCP):
         paper report?" against a 60-page review.
 
         Do not use when: you need the entire document to summarize or quote in full — call
-        `spacefrontiers_fetch_document` instead. Do not call this without first obtaining a
+        `machinelibrary_fetch_document` instead. Do not call this without first obtaining a
         real URI via search.
 
         Returns no more than five passages of 2K characters each. If no passage
@@ -812,7 +812,7 @@ def setup_tools(mcp: FastMCP):
                 if passages
                 else (
                     'No matching passages were found. Refine the query or use '
-                    'spacefrontiers_fetch_document for broader context.'
+                    'machinelibrary_fetch_document for broader context.'
                 )
             ),
         )

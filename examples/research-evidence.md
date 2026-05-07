@@ -38,7 +38,7 @@ the separate [REST documentation](https://machinelibrary.ai/docs/api).
 
 ```json
 {
-  "name": "spacefrontiers_search_documents",
+  "name": "machinelibrary_search_documents",
   "arguments": {
     "query": "retrieval augmented generation attribution citation evaluation",
     "limit": 5
@@ -59,7 +59,7 @@ than inventing a DOI or reconstructing one from a title.
 
 ```json
 {
-  "name": "spacefrontiers_search_in_document",
+  "name": "machinelibrary_search_in_document",
   "arguments": {
     "uri": "https://doi.org/10.48550/arxiv.2404.03381",
     "query": "how does planning affect citation attribution and faithfulness"

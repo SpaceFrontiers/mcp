@@ -29,6 +29,7 @@ DEFAULT_ALLOWED_ORIGINS = frozenset(
         'https://claude.com',
         'https://chatgpt.com',
         'https://cursor.com',
+        'https://machinelibrary.ai',
         'https://spacefrontiers.org',
         'null',
     }
@@ -51,7 +52,7 @@ class AuthValidationMiddleware(BaseHTTPMiddleware):
         self,
         app,
         users_api_url: str = 'http://users-api',
-        resource_url: str = 'https://mcp.spacefrontiers.org/.well-known/oauth-protected-resource',
+        resource_url: str = 'https://mcp.machinelibrary.ai/.well-known/oauth-protected-resource',
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ):
         super().__init__(app)

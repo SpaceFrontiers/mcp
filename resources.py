@@ -5,7 +5,7 @@ clients (Cursor file picker, Claude Desktop attach panel, IDE indexers) can
 discover Space Frontiers documents alongside local files. The `{uri_b64}`
 segment is the canonical document URI base64-url-encoded.
 
-The `spacefrontiers_fetch_document` tool remains the primary read path; this
+The `machinelibrary_fetch_document` tool remains the primary read path; this
 resource mirror exists for clients that pick up documents through the
 resources surface rather than through tool calls.
 """
