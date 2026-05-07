@@ -59,6 +59,10 @@ class SearchV2Client:
         limit: int = 30,
         index_names: list[str] | None = None,
         filter_types: list[str] | None = None,
+        filter_issns: list[str] | None = None,
+        filter_uri_prefixes: list[str] | None = None,
+        filter_issued_after: int | None = None,
+        filter_issued_before: int | None = None,
     ) -> dict[str, Any]:
         """POST /v2/search — sparse search with snippet extraction."""
         body: dict[str, Any] = {
@@ -70,6 +74,14 @@ class SearchV2Client:
             body['index_names'] = index_names
         if filter_types:
             body['filter_types'] = filter_types
+        if filter_issns:
+            body['filter_issns'] = filter_issns
+        if filter_uri_prefixes:
+            body['filter_uri_prefixes'] = filter_uri_prefixes
+        if filter_issued_after is not None:
+            body['filter_issued_after'] = filter_issued_after
+        if filter_issued_before is not None:
+            body['filter_issued_before'] = filter_issued_before
 
         async with self._session.post(
             f'{self._base_url}/v2/search/',

@@ -1,211 +1,555 @@
-"""MCP tools: search, fetch, and search_in_document.
+"""MCP tools for Space Frontiers full-text retrieval.
 
-search              — discover documents via sparse vector search (returns snippets).
-fetch               — retrieve a specific document by URI (full content + references).
-search_in_document  — find relevant passages within a single document.
+Four tools, all read-only, all idempotent, all `spacefrontiers_*` namespaced
+to avoid collisions when multiple MCP servers are mounted in one agent:
+
+- spacefrontiers_search_documents   — search papers, books, patents, Wikipedia
+- spacefrontiers_search_social      — search Reddit, Telegram, YouTube
+- spacefrontiers_fetch_document     — full text + references for one URI
+- spacefrontiers_search_in_document — passages within one document by query
+
+Every tool declares an `outputSchema` (via Pydantic return models) so calling
+LLMs can parse results structurally and cite by `source_uri` without parsing
+free-form prose.
 """
-
-from __future__ import annotations
 
 import asyncio
 import functools
 import logging
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastmcp import Context, FastMCP
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from client import MAX_CONTENT_LENGTH, AuthenticationError, InsufficientFundsError
-from formatting import (
-    format_document,
-    format_referenced_by,
-    format_search_results,
-    format_snippets,
-)
 
 logger = logging.getLogger(__name__)
 
-Source = Literal['documents', 'social']
 
-INSUFFICIENT_FUNDS_MSG = (
-    'Insufficient funds. Your Space Frontiers balance is too low for this request.\n\n'
-    'Add credits: https://spacefrontiers.org/payments?amount=10\n\n'
-    'Pricing: searches cost ~$0.005, document fetches ~$0.005.\n'
-    '$10 gives you approximately 2,000 searches.'
+# ---------------------------------------------------------------------------
+# Output schemas — exposed via FastMCP-generated outputSchema/structuredContent
+# ---------------------------------------------------------------------------
+
+
+class DocumentResult(BaseModel):
+    """One hit in a search result list. `source_uri` is the canonical URI to cite."""
+
+    title: str
+    source_uri: str = Field(
+        description='Canonical URI for citation (DOI URL when available, else first http URI, else first scheme URI).',
+    )
+    uris: list[str] = Field(default_factory=list, description='All known URIs for this document.')
+    score: float
+    snippet: str | None = Field(default=None, description='Best-matching text excerpt for this query.')
+    abstract: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    issued_at: int | None = Field(default=None, description='Unix timestamp (seconds, UTC).')
+    issued_date: str | None = Field(default=None, description='Human-readable date.')
+    content_size_tokens: int | None = Field(
+        default=None, description='Approximate full-text length in tokens.'
+    )
+    document_type: str | None = None
+
+
+class SearchResults(BaseModel):
+    """Top-N hits for a search query. Empty `hits` means no results in the queried index."""
+
+    query: str
+    index: Literal['documents', 'social']
+    hits: list[DocumentResult]
+    total: int | None = Field(
+        default=None, description='Total matching documents if known; null if unbounded.'
+    )
+    next_cursor: str | None = Field(
+        default=None, description='Opaque cursor for the next page; null if no more results.'
+    )
+
+
+class DocumentReference(BaseModel):
+    title: str | None = None
+    source_uri: str | None = None
+    doi: str | None = None
+
+
+class FullDocument(BaseModel):
+    """Full text + metadata + reference list for one document."""
+
+    title: str
+    source_uri: str
+    uris: list[str] = Field(default_factory=list)
+    abstract: str | None = None
+    content: str | None = Field(
+        default=None,
+        description=f'Full text, truncated to ~{MAX_CONTENT_LENGTH:,} characters when longer.',
+    )
+    content_truncated: bool = False
+    full_content_length: int | None = Field(
+        default=None, description='Original (untruncated) content length in characters.'
+    )
+    authors: list[str] = Field(default_factory=list)
+    issued_at: int | None = None
+    issued_date: str | None = None
+    languages: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    references: list[DocumentReference] = Field(default_factory=list)
+    referenced_by: list[DocumentResult] = Field(default_factory=list)
+
+
+class PassageMatch(BaseModel):
+    text: str
+    score: float
+    field: str | None = Field(
+        default=None,
+        description='Which document field the passage came from (content, abstract, ...).',
+    )
+
+
+class DocumentPassages(BaseModel):
+    """Passages extracted from one document by a text query, with citation context."""
+
+    source_uri: str
+    title: str | None = None
+    passages: list[PassageMatch]
+    referenced_by: list[DocumentResult] = Field(default_factory=list)
+    fallback_full_document: FullDocument | None = Field(
+        default=None,
+        description='If no passages matched, the full document is returned here as a fallback.',
+    )
+
+
+# ---------------------------------------------------------------------------
+# Error envelopes — returned in-band when billing/auth fail mid-tool-call
+# ---------------------------------------------------------------------------
+
+
+class ToolError(BaseModel):
+    """In-band error result. Tool-level isError flag is set by FastMCP when this is returned."""
+
+    error: str
+    message: str
+    next_step_url: str | None = None
+
+
+INSUFFICIENT_FUNDS = ToolError(
+    error='insufficient_funds',
+    message=(
+        'Your Space Frontiers balance is too low for this request. '
+        'Searches cost ~$0.005, fetches ~$0.005. $10 buys ~2,000 searches.'
+    ),
+    next_step_url='https://spacefrontiers.org/payments?amount=10',
 )
 
-AUTH_ERROR_MSG = (
-    'Authentication required. Your API key may be invalid or expired.\n\n'
-    'Get a new API key: https://spacefrontiers.org/keys\n\n'
-    'Then update your MCP configuration with the new key.'
+AUTH_ERROR = ToolError(
+    error='unauthenticated',
+    message='Your API key may be invalid or expired. Get a new key and update your MCP config.',
+    next_step_url='https://spacefrontiers.org/keys',
 )
 
 
 def _handle_billing_errors(fn):
-    """Decorator: catch billing/auth errors and return guidance text instead."""
+    """Catch billing/auth errors and surface them as in-band ToolError objects."""
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
         try:
             return await fn(*args, **kwargs)
         except InsufficientFundsError:
-            return INSUFFICIENT_FUNDS_MSG
+            return INSUFFICIENT_FUNDS
         except AuthenticationError:
-            return AUTH_ERROR_MSG
+            return AUTH_ERROR
 
     return wrapper
 
 
+# ---------------------------------------------------------------------------
+# Conversion helpers (raw search-api JSON → typed Pydantic models)
+# ---------------------------------------------------------------------------
+
+
+def _canonical_uri(uris: list[str]) -> str:
+    """Pick the best URI for citation: prefer doi.org URL, then any http(s), then scheme URI."""
+    for u in uris:
+        if 'doi.org/' in u:
+            return u
+    for u in uris:
+        if u.startswith(('http://', 'https://')):
+            return u
+    return uris[0] if uris else ''
+
+
+def _format_authors(authors: list[dict[str, Any]]) -> list[str]:
+    out: list[str] = []
+    for a in authors[:25]:
+        if 'name' in a:
+            out.append(a['name'])
+        elif 'family' in a:
+            given = a.get('given', '')
+            out.append(f'{a["family"]}, {given}' if given else a['family'])
+    return out
+
+
+def _format_date(ts: int | None) -> str | None:
+    if ts is None:
+        return None
+    from datetime import datetime, timezone
+    try:
+        return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime('%Y-%m-%d')
+    except (ValueError, TypeError, OSError):
+        return None
+
+
+def _hit_to_result(item: dict[str, Any]) -> DocumentResult:
+    doc = item.get('document') or {}
+    uris = doc.get('uris') or []
+    snippets = item.get('snippets') or []
+    snippet = next((s.get('text', '').strip() for s in snippets if s.get('text')), None)
+    content_length = doc.get('content_length') or 0
+    return DocumentResult(
+        title=doc.get('title') or 'Untitled',
+        source_uri=_canonical_uri(uris),
+        uris=uris,
+        score=float(item.get('score', 0.0)),
+        snippet=snippet,
+        abstract=doc.get('abstract'),
+        authors=_format_authors(doc.get('authors') or []),
+        issued_at=doc.get('issued_at'),
+        issued_date=_format_date(doc.get('issued_at')),
+        content_size_tokens=(content_length // 4) if content_length else None,
+        document_type=doc.get('type'),
+    )
+
+
+def _doc_to_full(data: dict[str, Any], referenced_by: list[DocumentResult]) -> FullDocument:
+    uris = data.get('uris') or []
+    doc = data.get('document') or {}
+    content = doc.get('content') or ''
+    truncated = len(content) > MAX_CONTENT_LENGTH
+    refs = []
+    for ref in (doc.get('references') or [])[:100]:
+        ref_uris = ref.get('uris') or []
+        doi = ref.get('doi') or None
+        refs.append(DocumentReference(
+            title=ref.get('title'),
+            source_uri=_canonical_uri(ref_uris) or (f'https://doi.org/{doi.lower()}' if doi else None),
+            doi=doi,
+        ))
+    return FullDocument(
+        title=doc.get('title') or 'Untitled',
+        source_uri=_canonical_uri(uris),
+        uris=uris,
+        abstract=doc.get('abstract'),
+        content=content[:MAX_CONTENT_LENGTH] if content else None,
+        content_truncated=truncated,
+        full_content_length=len(content) if content else None,
+        authors=_format_authors(doc.get('authors') or []),
+        issued_at=doc.get('issued_at'),
+        issued_date=_format_date(doc.get('issued_at')),
+        languages=doc.get('languages') or [],
+        tags=(doc.get('tags') or [])[:25],
+        references=refs,
+        referenced_by=referenced_by,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tool definitions
+# ---------------------------------------------------------------------------
+
+# Annotations applied to every tool — all four are read-only and idempotent.
+_READ_ONLY_ANNOTATIONS: dict[str, Any] = {
+    'readOnlyHint': True,
+    'idempotentHint': True,
+    'openWorldHint': True,
+    'destructiveHint': False,
+}
+
+
 def setup_tools(mcp: FastMCP):
-    @mcp.tool(annotations={'title': 'Search for documents'})
-    @_handle_billing_errors
-    async def search(
-        ctx: Context,
-        query: Annotated[str, Field(description='Free-text search query')],
-        limit: Annotated[
-            int,
-            Field(
-                description='Number of results to return. Use 20-30 for good coverage.',
-                ge=1,
-                le=100,
+    # ----- shared filter parameter types -----
+    LimitField = Annotated[
+        int,
+        Field(
+            description=(
+                'Number of results to return. Use 20-30 for broad coverage on a single query; '
+                'smaller (5-10) when running many parallel queries.'
             ),
-        ] = 30,
-        source: Annotated[
-            Source | None,
+            ge=1,
+            le=100,
+        ),
+    ]
+    QueryField = Annotated[
+        str,
+        Field(
+            description=(
+                'Free-text search query. Can be empty when filters alone are enough '
+                '(e.g. browse recent papers from one journal).'
+            ),
+        ),
+    ]
+    IssuedAfter = Annotated[
+        int | None,
+        Field(
+            description=(
+                'Only return documents published after this Unix timestamp (seconds, UTC). '
+                'For "last 7 days" use `now - 604800`.'
+            ),
+        ),
+    ]
+    IssuedBefore = Annotated[
+        int | None,
+        Field(
+            description='Only return documents published before this Unix timestamp (seconds, UTC).',
+        ),
+    ]
+
+    @mcp.tool(
+        name='spacefrontiers_search_documents',
+        annotations={'title': 'Search papers, books, patents, Wikipedia', **_READ_ONLY_ANNOTATIONS},
+    )
+    @_handle_billing_errors
+    async def search_documents(
+        ctx: Context,
+        query: QueryField = '',
+        limit: LimitField = 30,
+        filter_issns: Annotated[
+            list[str] | None,
             Field(
                 description=(
-                    'Which index to search:\n'
-                    '- "documents" — scholarly papers, books, patents, Wikipedia, '
-                    'standards, manuals (use for scientific, factual, or technical queries)\n'
-                    '- "social" — Reddit, Telegram, YouTube '
-                    '(use for opinions, discussions, community knowledge, news, '
-                    'events, announcements, and current developments)\n'
-                    'Omit to search all sources.\n\n'
-                    'IMPORTANT: For queries about news, events, recent developments, '
-                    'announcements, or anything time-sensitive, ALWAYS search social '
-                    '(either omit source or run a separate search with source="social"). '
-                    'Social sources often have the most current and relevant information '
-                    'for these topics.'
+                    'Filter by journal ISSN. Accepts hyphenated ("0028-0836") or plain ("00280836"). '
+                    'Pair with empty `query` to browse a journal.'
                 ),
             ),
         ] = None,
-    ) -> str:
-        """Search across a corpus of 120M+ documents and return top results with snippets.
+        filter_types: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    'Filter by CrossRef-style document type. Examples: "journal-article", "book", '
+                    '"book-chapter", "proceedings-article", "posted-content" (preprints), "patent".'
+                ),
+            ),
+        ] = None,
+        filter_issued_after: IssuedAfter = None,
+        filter_issued_before: IssuedBefore = None,
+    ) -> SearchResults | ToolError:
+        """Search peer-reviewed papers, books, patents, and Wikipedia in the Space Frontiers `documents` index.
 
-        The corpus includes two indexes:
-        - **documents**: academic papers (CrossRef, PubMed, arXiv), books, patents,
-          Wikipedia, technical standards, and manuals.
-        - **social**: Reddit posts/comments, Telegram channel messages, YouTube transcripts.
-          Social contains discussions, news, events, announcements, and community knowledge.
+        Use when: the user asks about scientific concepts, technical methods, prior art, citations,
+        a DOI / ISBN / arXiv ID / PubMed ID, or wants peer-reviewed sources.
 
-        Each result includes title, URIs (DOI, ISBN, arXiv, PubMed, etc.),
-        a relevance score, and the best-matching text snippet.
+        Do not use when: the question is about news, current events, ongoing discussions, or social
+        sentiment — call `spacefrontiers_search_social` instead. For general web pages or code,
+        use a different MCP server.
 
-        **Tips for effective searching:**
-        - Use a limit of **20-30** to get good coverage of the corpus.
-        - Use 2-6 varied queries covering different aspects, synonyms, or phrasings.
-          For example, instead of just "CRISPR gene editing", also try "cas9 genome
-          engineering", "guide RNA targeting", etc.
-        - Send several search calls in parallel for related queries and combine results.
-        - **For news, events, or current topics**, always include a search with
-          source="social" — social sources are often more timely and relevant.
-        - Use URIs from results with ``fetch`` to read full documents and follow citations.
-        - Use ``search_in_document`` to find specific passages within large documents.
+        Examples: "crispr base editing efficiency", "doi:10.1038/s41586-023-06924-6",
+        "isbn:9780262033848", "arxiv:2301.00001", "transformer attention scaling laws".
+
+        Tips:
+        - Run 2-6 parallel queries with varied phrasings (synonyms, narrower/broader terms).
+        - Pass an empty `query` plus `filter_issns` to browse recent issues of a specific journal.
+        - Use the returned `source_uri` verbatim with `spacefrontiers_fetch_document` for full text.
         """
         client = ctx.request_context.lifespan_context.search_client
-        index_names = [source] if source else None
-        data = await client.search(query, limit=limit, index_names=index_names)
-        return format_search_results(data)
+        data = await client.search(
+            query,
+            limit=limit,
+            index_names=['documents'],
+            filter_types=filter_types,
+            filter_issns=filter_issns,
+            filter_issued_after=filter_issued_after,
+            filter_issued_before=filter_issued_before,
+        )
+        hits = [_hit_to_result(item) for item in (data.get('hits') or [])]
+        return SearchResults(
+            query=query,
+            index='documents',
+            hits=hits,
+            total=data.get('total_hits'),
+            next_cursor=data.get('next_cursor'),
+        )
 
-    @mcp.tool(annotations={'title': 'Fetch a document by URI'})
+    @mcp.tool(
+        name='spacefrontiers_search_social',
+        annotations={'title': 'Search Reddit, Telegram, YouTube', **_READ_ONLY_ANNOTATIONS},
+    )
     @_handle_billing_errors
-    async def fetch(
+    async def search_social(
+        ctx: Context,
+        query: QueryField = '',
+        limit: LimitField = 30,
+        filter_uri_prefixes: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    'Restrict to one or more sources by URI prefix. Examples: '
+                    '`["https://reddit.com/r/MachineLearning/"]` for one subreddit (case-sensitive), '
+                    '`["@channel_username"]` for one Telegram channel (the @ prefix is resolved automatically).'
+                ),
+            ),
+        ] = None,
+        filter_issued_after: IssuedAfter = None,
+        filter_issued_before: IssuedBefore = None,
+    ) -> SearchResults | ToolError:
+        """Search Reddit, Telegram channels, and YouTube transcripts in the Space Frontiers `social` index.
+
+        Use when: the user asks about news, recent events, announcements, ongoing discussions,
+        community opinions, or anything time-sensitive that wouldn't be in peer-reviewed literature.
+
+        Do not use when: the question is about settled scientific knowledge, citations, or prior art —
+        call `spacefrontiers_search_documents` instead. For general web search, use a different
+        MCP server.
+
+        Examples: "openai gpt-5 release date", "site:reddit.com/r/LocalLLaMA quantization",
+        "@telegram_channel breaking news", "kubernetes 1.33 changes discussion".
+
+        Tips:
+        - Pair an empty `query` with `filter_uri_prefixes` to browse a subreddit or Telegram channel
+          chronologically (combine with `filter_issued_after` for a time window).
+        - For broad topics, also call `spacefrontiers_search_documents` in parallel for grounded sources.
+        """
+        client = ctx.request_context.lifespan_context.search_client
+        data = await client.search(
+            query,
+            limit=limit,
+            index_names=['social'],
+            filter_uri_prefixes=filter_uri_prefixes,
+            filter_issued_after=filter_issued_after,
+            filter_issued_before=filter_issued_before,
+        )
+        hits = [_hit_to_result(item) for item in (data.get('hits') or [])]
+        return SearchResults(
+            query=query,
+            index='social',
+            hits=hits,
+            total=data.get('total_hits'),
+            next_cursor=data.get('next_cursor'),
+        )
+
+    @mcp.tool(
+        name='spacefrontiers_fetch_document',
+        annotations={'title': 'Fetch full document by URI', **_READ_ONLY_ANNOTATIONS},
+    )
+    @_handle_billing_errors
+    async def fetch_document(
         ctx: Context,
         uri: Annotated[
             str,
             Field(
                 description=(
-                    'Exact URI taken from search results or document references. '
-                    'Must be copied verbatim — do NOT compose or guess URIs.'
+                    'Canonical URI of the document to fetch. Copy verbatim from a `source_uri` field '
+                    'in a previous search result, or supply a known identifier in one of these schemes: '
+                    '`doi:10.…`, `https://doi.org/10.…`, `arxiv:2301.00001`, `pmid:12345678`, '
+                    '`isbn:9780262033848`. Do NOT compose or guess URIs.'
                 ),
+                examples=[
+                    'https://doi.org/10.1038/s41586-023-06924-6',
+                    'arxiv:2301.00001',
+                    'pmid:38019072',
+                    'isbn:9780262033848',
+                ],
             ),
         ],
-    ) -> str:
-        """Retrieve a full document by its URI.
+    ) -> FullDocument | ToolError:
+        """Retrieve the full text, metadata, and references of one Space Frontiers document.
 
-        Returns the document's title, authors, abstract, content, metadata,
-        references (with titles and URIs), and documents that cite this one.
+        Use when: you have a `source_uri` from a search hit and need the body to quote, summarize,
+        or extract structured facts; or you want to walk the citation graph via `references`
+        and `referenced_by`.
 
-        Use reference URIs to follow the citation graph and discover related work.
+        Do not use when: you have not yet found the document — call a `spacefrontiers_search_*`
+        tool first to obtain a real `source_uri`. Do not guess DOIs.
 
-        **For large documents** (over ~20K tokens as shown in search result Size field),
-        consider using ``search_in_document`` instead to extract only relevant passages.
+        Returns title, authors, abstract, content (truncated above ~100K chars), references with URIs,
+        and up to 30 `referenced_by` documents you can fetch next. For documents over ~20K tokens
+        prefer `spacefrontiers_search_in_document` to extract only the passages you need.
 
-        This is a cheap tool — don't hesitate to fetch documents and follow references.
+        Examples: `https://doi.org/10.1038/s41586-023-06924-6`, `arxiv:2301.00001`, `pmid:38019072`.
         """
         client = ctx.request_context.lifespan_context.search_client
-
         doc, referenced_by_data = await asyncio.gather(
             client.get_document_by_uri(uri),
             client.find_referenced_by(uri, limit=30),
         )
         if doc is None:
-            return 'Document not found.'
-        result = format_document(doc, max_content=MAX_CONTENT_LENGTH)
+            return ToolError(
+                error='not_found',
+                message=(
+                    f'No document with URI {uri!r}. The DOI may not yet be in our corpus — '
+                    'crawls of newly cited DOIs are queued in the background; retry in a few minutes. '
+                    'For non-academic sources, try `spacefrontiers_search_social`.'
+                ),
+            )
+        referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
+        return _doc_to_full(doc, referenced_by)
 
-        referenced_by_section = format_referenced_by(referenced_by_data)
-        if referenced_by_section:
-            result += '\n\n' + referenced_by_section
-        return result
-
-    @mcp.tool(annotations={'title': 'Search within a document'})
+    @mcp.tool(
+        name='spacefrontiers_search_in_document',
+        annotations={'title': 'Search passages within one document', **_READ_ONLY_ANNOTATIONS},
+    )
     @_handle_billing_errors
     async def search_in_document(
         ctx: Context,
         uri: Annotated[
             str,
-            Field(
-                description=(
-                    'Exact URI of the document to search within. '
-                    'Must be copied verbatim from search results or references.'
-                ),
-            ),
+            Field(description='Canonical URI of the document. Copy verbatim from a search hit; do NOT guess.'),
         ],
         query: Annotated[
             str,
-            Field(
-                description='Text query to find relevant passages within the document.',
-            ),
+            Field(description='Text query for the passages you want to find inside this document.'),
         ],
-    ) -> str:
-        """Find relevant passages within a specific document.
+    ) -> DocumentPassages | ToolError:
+        """Find specific passages inside one Space Frontiers document without reading the whole body.
 
-        Runs a sparse search scoped to one document and returns the best-matching
-        snippets along with document metadata and references.
+        Use when: the document is large (size > ~20K tokens shown in `content_size_tokens`)
+        and you only need the parts relevant to a sub-question, e.g. "what error rates does this
+        paper report?" against a 60-page review.
 
-        Use this instead of ``fetch`` when:
-        - The document is large (over ~20K tokens) and you need specific information.
-        - You want to find particular passages without reading the entire content.
+        Do not use when: you need the entire document to summarize or quote in full — call
+        `spacefrontiers_fetch_document` instead. Do not call this without first obtaining a
+        real URI via search.
+
+        If no passage matches the query, the full document is returned in `fallback_full_document`
+        so the caller never has to retry with a second tool call.
         """
         client = ctx.request_context.lifespan_context.search_client
-
         snippets_data, referenced_by_data = await asyncio.gather(
             client.get_document_by_uri(uri, text_filter=query),
             client.find_referenced_by(uri, limit=30),
         )
         if snippets_data is None:
-            return 'Document not found.'
+            return ToolError(
+                error='not_found',
+                message=f'No document with URI {uri!r}. Confirm the URI via search first.',
+            )
 
-        result = format_snippets(snippets_data)
-        if not result:
-            # Sparse search found no matching passages — fall back to full document
-            doc = await client.get_document_by_uri(uri)
-            if doc is not None:
-                result = format_document(doc, max_content=MAX_CONTENT_LENGTH)
-            else:
-                result = 'No matching passages found.'
+        passages: list[PassageMatch] = []
+        for hit in (snippets_data.get('hits') or []):
+            for s in hit.get('snippets') or []:
+                text = (s.get('text') or '').strip()
+                if text:
+                    passages.append(PassageMatch(
+                        text=text,
+                        score=float(s.get('score', 0.0)),
+                        field=s.get('field'),
+                    ))
 
-        referenced_by_section = format_referenced_by(referenced_by_data)
-        if referenced_by_section:
-            result += '\n\n' + referenced_by_section
-        return result
+        referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
+
+        # Resolve title + canonical URI from the first hit's document, falling back to the input URI.
+        first_doc = next(((h.get('document') or {}) for h in (snippets_data.get('hits') or [])), {})
+        title = first_doc.get('title')
+        canonical = _canonical_uri(snippets_data.get('uris') or first_doc.get('uris') or [uri])
+
+        fallback: FullDocument | None = None
+        if not passages:
+            full = await client.get_document_by_uri(uri)
+            if full is not None:
+                fallback = _doc_to_full(full, referenced_by)
+
+        return DocumentPassages(
+            source_uri=canonical or uri,
+            title=title,
+            passages=passages,
+            referenced_by=referenced_by,
+            fallback_full_document=fallback,
+        )

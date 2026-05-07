@@ -1,0 +1,24 @@
+# smithery.yaml — Space Frontiers MCP server
+# https://smithery.ai/docs/build/project-config/smithery.yaml
+#
+# This server is hosted; Smithery does not need to build a container.
+# Users authenticate with a Bearer API key (OAuth coming soon).
+
+startCommand:
+  type: http
+  url: "https://mcp.spacefrontiers.org/"
+
+configSchema:
+  type: object
+  required: ["apiKey"]
+  properties:
+    apiKey:
+      type: string
+      title: "Space Frontiers API key"
+      description: "Get a key at https://spacefrontiers.org/keys. Sent as `Authorization: Bearer <key>`."
+      x-from: header
+      x-header-name: "Authorization"
+      x-header-prefix: "Bearer "
+
+exampleConfig:
+  apiKey: "sf_live_xxxxxxxxxxxxxxxx"

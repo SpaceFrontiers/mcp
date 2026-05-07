@@ -1,4 +1,8 @@
-"""Auth middleware: validates Bearer tokens via users-api, returns OAuth 401."""
+"""Auth + transport-hardening middleware for the MCP server.
+
+Validates Bearer tokens via users-api, enforces an Origin allowlist (DNS-rebinding
+defense per the MCP spec security warning) and an MCP-Protocol-Version allowlist.
+"""
 
 import contextvars
 import logging
@@ -12,6 +16,22 @@ logger = logging.getLogger(__name__)
 # Per-request auth headers, read by SearchV2Client._get_headers()
 auth_headers_var: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar('auth_headers', default=None)
 
+# MCP spec revisions this server speaks. Clients send `MCP-Protocol-Version`
+# on every HTTP request; per spec we 400 unknown versions and assume the
+# 2025-03-26 default when the header is absent.
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({'2025-03-26', '2025-06-18', '2025-11-25'})
+
+# Origin allowlist for browser-mounted MCP clients. Non-browser clients (Claude
+# Code, fastmcp CLI, raw curl) do not send Origin and are allowed through.
+DEFAULT_ALLOWED_ORIGINS = frozenset({
+    'https://claude.ai',
+    'https://claude.com',
+    'https://chatgpt.com',
+    'https://cursor.com',
+    'https://spacefrontiers.org',
+    'null',
+})
+
 
 def _unauthorized(content: str, resource_url: str) -> Response:
     return Response(
@@ -23,17 +43,19 @@ def _unauthorized(content: str, resource_url: str) -> Response:
 
 
 class AuthValidationMiddleware(BaseHTTPMiddleware):
-    """Validate Bearer token via users-api; return 401 with OAuth metadata if invalid."""
+    """Validate Bearer token, Origin and MCP-Protocol-Version on every request."""
 
     def __init__(
         self,
         app,
         users_api_url: str = 'http://users-api',
         resource_url: str = 'https://mcp.spacefrontiers.org/.well-known/oauth-protected-resource',
+        allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ):
         super().__init__(app)
         self._auth_url = f'{users_api_url.rstrip("/")}/v2/users/auth/'
         self._resource_url = resource_url
+        self._allowed_origins = allowed_origins
         self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -42,12 +64,34 @@ class AuthValidationMiddleware(BaseHTTPMiddleware):
         return self._session
 
     async def dispatch(self, request, call_next):
-        auth_header = request.headers.get('authorization', '')
+        # CORS preflight: short-circuit before any auth/version check.
+        if request.method == 'OPTIONS':
+            return Response(status_code=204)
 
+        # Origin allowlist (DNS-rebinding defense per MCP spec security note).
+        # Per the 2025-11-25 changelog, reject with 403 (not 400).
+        origin = request.headers.get('origin')
+        if origin and origin not in self._allowed_origins:
+            return Response(
+                status_code=403,
+                media_type='text/plain',
+                content='Origin not allowed',
+            )
+
+        # MCP-Protocol-Version validation. Spec: 400 on unknown values; treat
+        # absence as the 2025-03-26 default for backward compatibility.
+        protocol_version = request.headers.get('mcp-protocol-version')
+        if protocol_version and protocol_version not in SUPPORTED_PROTOCOL_VERSIONS:
+            return Response(
+                status_code=400,
+                media_type='text/plain',
+                content=f'Unsupported MCP-Protocol-Version: {protocol_version}',
+            )
+
+        auth_header = request.headers.get('authorization', '')
         if not auth_header:
             return _unauthorized('Authentication required', self._resource_url)
 
-        # Validate token with users-api
         try:
             session = await self._get_session()
             async with session.get(self._auth_url, headers={'Authorization': auth_header}) as resp:
