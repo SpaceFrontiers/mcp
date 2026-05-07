@@ -1,7 +1,7 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.spacefrontiers/mcp",
-  "description": "Full-text retrieval over peer-reviewed papers, books, patents, Wikipedia, Reddit, Telegram, and YouTube. Four tools: search_documents, search_social, fetch_document, search_in_document. Returns canonical source URIs for citation.",
+  "description": "Full-text retrieval: papers, books, patents, Wikipedia, Reddit, Telegram, YouTube. With citations.",
   "version": "0.2.0",
   "status": "active",
   "repository": {
