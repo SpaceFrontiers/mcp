@@ -55,14 +55,25 @@ def _build_mcp_with_mocks(
 
 
 def _tool_fn(mcp: FastMCP, name: str):
-    tool = mcp._tool_manager._tools.get(name)
-    assert tool is not None, f'tool {name} not registered (have {list(mcp._tool_manager._tools.keys())})'
-    return tool.fn
+    from fastmcp.tools.tool import Tool as _FastMCPTool
+    for component in mcp.local_provider._components.values():
+        if isinstance(component, _FastMCPTool) and component.name == name:
+            return component.fn
+    registered = [c.name for c in mcp.local_provider._components.values() if isinstance(c, _FastMCPTool)]
+    raise AssertionError(f'tool {name} not registered (have {registered})')
 
 
 # ---------------------------------------------------------------------------
 # Registration: every tool is namespaced and read-only
 # ---------------------------------------------------------------------------
+
+
+def _tool_obj(mcp: FastMCP, name: str):
+    from fastmcp.tools.tool import Tool as _FastMCPTool
+    for component in mcp.local_provider._components.values():
+        if isinstance(component, _FastMCPTool) and component.name == name:
+            return component
+    return None
 
 
 @pytest.mark.parametrize(
@@ -77,7 +88,7 @@ def _tool_fn(mcp: FastMCP, name: str):
 def test_tools_registered_with_namespace(tool_name):
     mcp = FastMCP('test')
     setup_tools(mcp)
-    assert tool_name in mcp._tool_manager._tools
+    assert _tool_obj(mcp, tool_name) is not None
 
 
 def test_tools_have_read_only_annotations():
@@ -89,7 +100,7 @@ def test_tools_have_read_only_annotations():
         'spacefrontiers_fetch_document',
         'spacefrontiers_search_in_document',
     ):
-        annotations = mcp._tool_manager._tools[name].annotations
+        annotations = _tool_obj(mcp, name).annotations
         assert annotations is not None
         assert annotations.readOnlyHint is True
         assert annotations.idempotentHint is True

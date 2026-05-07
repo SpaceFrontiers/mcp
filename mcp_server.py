@@ -148,4 +148,7 @@ def create_app() -> Starlette:
 app = create_app()
 
 if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=80)
+    # ws='none' disables uvicorn's websockets backend; we serve Streamable
+    # HTTP only and don't accept WS upgrades, so loading websockets just
+    # emitted DeprecationWarnings on startup with no benefit.
+    uvicorn.run(app, host='0.0.0.0', port=80, ws='none')
