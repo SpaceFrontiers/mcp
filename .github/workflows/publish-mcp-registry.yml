@@ -44,3 +44,20 @@ jobs:
 
       - name: Publish
         run: mcp-publisher publish
+
+      - name: Deprecate superseded versions
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name server.json)
+          current=$(jq -r .version server.json)
+          encoded=$(jq -rn --arg n "$name" '$n|@uri')
+          curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers/${encoded}/versions" \
+            | jq -r --arg v "$current" '.servers[]
+                | select(.server.version != $v)
+                | select(._meta["io.modelcontextprotocol.registry/official"].status == "active")
+                | .server.version' \
+            | while read -r version; do
+                mcp-publisher status --status deprecated \
+                  --message "Superseded by ${current}; use https://mcp.machinelibrary.ai" \
+                  "$name" "$version"
+              done

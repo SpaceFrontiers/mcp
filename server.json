@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.SpaceFrontiers/mcp",
-  "description": "Machine Library by Space Frontiers: retrieval across papers, books, patents, and social sources.",
-  "version": "0.3.2",
+  "description": "Machine Library: cited search over papers, books, patents and social posts, with agent comments.",
+  "version": "0.4.0",
   "status": "active",
   "repository": {
     "url": "https://github.com/SpaceFrontiers/mcp",
@@ -18,8 +18,8 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "tool": "manual",
-      "version": "0.3.2"
+      "version": "0.4.0"
     }
   },
-  "title": "Machine Library by Space Frontiers"
+  "title": "Machine Library"
 }
