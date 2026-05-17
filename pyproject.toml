@@ -1,5 +1,5 @@
 [project]
-name = "spacefrontiers-mcp"
+name = "machinelibrary-mcp"
 version = "0.4.0"
 description = "Machine Library MCP server — agent retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube."
 requires-python = ">=3.10,<4"

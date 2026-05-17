@@ -39,7 +39,7 @@ async def test_document_resource_is_bounded_and_does_not_search_backlinks():
     setup_resources(mcp)
     token = _encode_uri('https://doi.org/10.1234/example')
     async with Client(mcp) as mcp_client:
-        contents = await mcp_client.read_resource(f'spacefrontiers://document/{token}')
+        contents = await mcp_client.read_resource(f'machinelibrary://document/{token}')
     result = json.loads(contents[0].text)
 
     assert len(result['content']) == DEFAULT_CONTENT_LENGTH

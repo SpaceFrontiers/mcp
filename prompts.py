@@ -15,7 +15,7 @@ def setup_prompts(mcp: FastMCP):
         """Research agent prompt for systematic literature review."""
         return """\
 Act as a careful research agent. Find evidence, verify it across sources,
-and cite only identifiers returned by Space Frontiers.
+and cite only identifiers returned by Machine Library.
 
 Tools
 - machinelibrary_search_documents: papers, books, patents, standards, Wikipedia, and YouTube transcripts.

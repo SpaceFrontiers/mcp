@@ -35,7 +35,8 @@ uv run fastmcp run mcp_server.py
 
 The hosted endpoint expects `Authorization: Bearer <key>` and validates the
 token against `users-api`. Stdio/self-hosted use reads
-`SPACE_FRONTIERS_API_KEY` for upstream API authentication.
+`MACHINELIBRARY_API_KEY` (or the older `SPACE_FRONTIERS_API_KEY`) for upstream
+API authentication.
 
 ## Conventions
 
