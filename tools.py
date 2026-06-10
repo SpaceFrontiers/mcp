@@ -1,10 +1,10 @@
 """MCP tools for Machine Library full-text retrieval.
 
-Four tools, all read-only, all idempotent, all `machinelibrary_*` namespaced
+Three tools, all read-only, all idempotent, all `machinelibrary_*` namespaced
 to avoid collisions when multiple MCP servers are mounted in one agent:
 
-- machinelibrary_search_documents   — papers, books, patents, standards, Wikipedia, YouTube transcripts
-- machinelibrary_search_social      — search Reddit, Telegram, Discord
+- machinelibrary_search             — papers, books, patents, standards, Wikipedia, YouTube
+                                      transcripts, Reddit, Telegram, Discord
 - machinelibrary_fetch_document     — full text + references for one URI
 - machinelibrary_search_in_document — passages within one document by query
 
@@ -16,7 +16,7 @@ free-form prose.
 import asyncio
 import functools
 import logging
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
@@ -47,6 +47,8 @@ _MAX_LANGUAGES = 12
 _MAX_REFERENCED_BY = 20
 _MAX_SEARCH_WINDOW = 500
 _MAX_QUERY_LENGTH = 16 * 1024
+# The public API serves its default profile to API keys, so name both corpora.
+_SEARCH_INDEXES = ['documents', 'social']
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +61,13 @@ class DocumentResult(BaseModel):
 
     id: str = ''
     title: str
+    source: str | None = Field(
+        default=None,
+        description=(
+            'documents (papers, books, patents, standards, Wikipedia, YouTube transcripts) '
+            'or social (Reddit, Telegram, Discord).'
+        ),
+    )
     source_uri: str = Field(
         description='Canonical URI for citation (DOI URL when available, else first http URI, else first scheme URI).',
     )
@@ -76,10 +85,9 @@ class DocumentResult(BaseModel):
 
 
 class SearchResults(BaseModel):
-    """Top-N hits for a search query. Empty `hits` means no results in the queried index."""
+    """Top-N hits for a search query. Empty `hits` means nothing matched."""
 
     query: str
-    index: Literal['documents', 'social']
     hits: list[DocumentResult]
     count: int
     total: int | None = Field(default=None, description='Total matching documents if known; null if unbounded.')
@@ -256,6 +264,7 @@ def _hit_to_result(item: dict[str, Any]) -> DocumentResult:
     return DocumentResult(
         id=str(item.get('id') or doc.get('id') or ''),
         title=doc.get('title') or 'Untitled',
+        source=item.get('source'),
         source_uri=_canonical_uri(uris),
         uris=uris,
         score=float(item.get('score', 0.0)),
@@ -327,7 +336,6 @@ def _doc_to_full(
 
 def _search_results(
     query: str,
-    index: Literal['documents', 'social'],
     offset: int,
     data: dict[str, Any],
 ) -> SearchResults:
@@ -335,7 +343,6 @@ def _search_results(
     has_more = bool(data.get('has_next'))
     return SearchResults(
         query=query,
-        index=index,
         hits=hits,
         count=len(hits),
         total=data.get('total_hits'),
@@ -392,7 +399,7 @@ def _is_social_uri(uri: str) -> bool:
 # Tool definitions
 # ---------------------------------------------------------------------------
 
-# Annotations applied to every tool — all four are read-only and idempotent.
+# Annotations applied to every tool — all are read-only and idempotent.
 _READ_ONLY_ANNOTATIONS: dict[str, Any] = {
     'readOnlyHint': True,
     'idempotentHint': True,
@@ -498,27 +505,15 @@ def setup_tools(mcp: FastMCP):
     ]
 
     @mcp.tool(
-        name='machinelibrary_search_documents',
-        annotations={
-            'title': 'Search papers, books, patents, Wikipedia, YouTube transcripts',
-            **_READ_ONLY_ANNOTATIONS,
-        },
+        name='machinelibrary_search',
+        annotations={'title': 'Search', **_READ_ONLY_ANNOTATIONS},
     )
     @_handle_billing_errors
-    async def search_documents(
+    async def search(
         ctx: Context,
         query: QueryField = '',
         limit: LimitField = 10,
         offset: OffsetField = 0,
-        filter_issns: Annotated[
-            list[str] | None,
-            Field(
-                description=(
-                    'Filter by journal ISSN. Accepts hyphenated ("0028-0836") or plain ("00280836"). '
-                    'Pair with empty `query` to browse a journal.'
-                ),
-            ),
-        ] = None,
         filter_types: Annotated[
             list[str] | None,
             Field(
@@ -528,64 +523,15 @@ def setup_tools(mcp: FastMCP):
                 ),
             ),
         ] = None,
-        filter_issued_after: IssuedAfter = None,
-        filter_issued_before: IssuedBefore = None,
-    ) -> SearchResults:
-        """Search papers, books, patents, standards, Wikipedia, and YouTube transcripts.
-
-        These sources belong to the Machine Library `documents` index.
-
-        Use when: the user asks about scientific concepts, technical methods, prior art, citations,
-        a DOI / ISBN / arXiv ID / PubMed ID, or wants peer-reviewed sources.
-
-        Do not use when: the question is about news, current events, ongoing discussions, or social
-        sentiment — call `machinelibrary_search_social` instead. For general web pages or code,
-        use a different MCP server.
-
-        Examples: "crispr base editing efficiency", "doi:10.1038/s41586-023-06924-6",
-        "isbn:9780262033848", "arxiv:2301.00001", "transformer attention scaling laws".
-
-        Tips:
-        - Run 2-6 parallel queries with varied phrasings (synonyms, narrower/broader terms).
-        - Pass an empty `query` plus `filter_issns` to browse recent issues of a specific journal.
-        - Use the returned `source_uri` verbatim with `machinelibrary_fetch_document` for full text.
-        """
-        query = query.strip()
-        _validate_date_range(filter_issued_after, filter_issued_before)
-        if not query and not any(
-            (
-                filter_issns,
-                filter_types,
-                filter_issued_after is not None,
-                filter_issued_before is not None,
-            )
-        ):
-            raise ToolError('query may be empty only when at least one document filter is supplied')
-        if offset + limit > _MAX_SEARCH_WINDOW:
-            raise ToolError(f'offset + limit must not exceed {_MAX_SEARCH_WINDOW}')
-        client = ctx.request_context.lifespan_context.search_client
-        data = await client.search(
-            query,
-            limit=limit,
-            offset=offset,
-            index_names=['documents'],
-            filter_types=filter_types,
-            filter_issns=filter_issns,
-            filter_issued_after=filter_issued_after,
-            filter_issued_before=filter_issued_before,
-        )
-        return _search_results(query, 'documents', offset, data)
-
-    @mcp.tool(
-        name='machinelibrary_search_social',
-        annotations={'title': 'Search Reddit, Telegram, Discord', **_READ_ONLY_ANNOTATIONS},
-    )
-    @_handle_billing_errors
-    async def search_social(
-        ctx: Context,
-        query: QueryField = '',
-        limit: LimitField = 10,
-        offset: OffsetField = 0,
+        filter_issns: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    'Filter by journal ISSN. Accepts hyphenated ("0028-0836") or plain ("00280836"). '
+                    'Pair with empty `query` to browse a journal.'
+                ),
+            ),
+        ] = None,
         filter_uri_prefixes: Annotated[
             list[str] | None,
             Field(
@@ -599,33 +545,36 @@ def setup_tools(mcp: FastMCP):
         filter_issued_after: IssuedAfter = None,
         filter_issued_before: IssuedBefore = None,
     ) -> SearchResults:
-        """Search Reddit, Telegram channels, and Discord in the Machine Library `social` index.
+        """Search papers, books, patents, standards, Wikipedia, YouTube transcripts, and public
+        discussion on Reddit, Telegram, and Discord in one ranked list.
 
-        Use when: the user asks about news, recent events, announcements, ongoing discussions,
-        community opinions, or anything time-sensitive that wouldn't be in peer-reviewed literature.
+        Use when: the user asks about scientific concepts, technical methods, prior art, citations,
+        a DOI / ISBN / arXiv ID / PubMed ID, current events, or community experience. Each hit's
+        `source` says whether it came from `documents` or `social`.
 
-        Do not use when: the question is about settled scientific knowledge, citations, or prior art —
-        call `machinelibrary_search_documents` instead. For general web search, use a different
-        MCP server.
+        Do not use when: you need general web pages or code — use a different MCP server.
 
-        Examples: "openai gpt-5 release date", "site:reddit.com/r/LocalLLaMA quantization",
-        "@telegram_channel breaking news", "kubernetes 1.33 changes discussion".
+        Examples: "crispr base editing efficiency", "doi:10.1038/s41586-023-06924-6",
+        "isbn:9780262033848", "openai gpt-5 release date", "kubernetes 1.33 changes discussion".
 
         Tips:
-        - Pair an empty `query` with `filter_uri_prefixes` to browse a subreddit or Telegram channel
-          chronologically (combine with `filter_issued_after` for a time window).
-        - For broad topics, also call `machinelibrary_search_documents` in parallel for grounded sources.
+        - Run 2-6 parallel queries with varied phrasings (synonyms, narrower/broader terms).
+        - Pass an empty `query` plus `filter_issns` to browse a journal, or plus
+          `filter_uri_prefixes` to browse a subreddit or Telegram channel chronologically.
+        - Use the returned `source_uri` verbatim with `machinelibrary_fetch_document` for full text.
         """
         query = query.strip()
         _validate_date_range(filter_issued_after, filter_issued_before)
         if not query and not any(
             (
+                filter_types,
+                filter_issns,
                 filter_uri_prefixes,
                 filter_issued_after is not None,
                 filter_issued_before is not None,
             )
         ):
-            raise ToolError('query may be empty only when at least one social filter is supplied')
+            raise ToolError('query may be empty only when at least one filter is supplied')
         if offset + limit > _MAX_SEARCH_WINDOW:
             raise ToolError(f'offset + limit must not exceed {_MAX_SEARCH_WINDOW}')
         client = ctx.request_context.lifespan_context.search_client
@@ -633,12 +582,14 @@ def setup_tools(mcp: FastMCP):
             query,
             limit=limit,
             offset=offset,
-            index_names=['social'],
+            index_names=_SEARCH_INDEXES,
+            filter_types=filter_types,
+            filter_issns=filter_issns,
             filter_uri_prefixes=filter_uri_prefixes,
             filter_issued_after=filter_issued_after,
             filter_issued_before=filter_issued_before,
         )
-        return _search_results(query, 'social', offset, data)
+        return _search_results(query, offset, data)
 
     @mcp.tool(
         name='machinelibrary_fetch_document',
@@ -689,8 +640,8 @@ def setup_tools(mcp: FastMCP):
         Use when: you have a `source_uri` from a search hit and need the body to quote, summarize,
         extract structured facts, or inspect its references.
 
-        Do not use when: you have not yet found the document — call a `machinelibrary_search_*`
-        tool first to obtain a real `source_uri`. Do not guess DOIs.
+        Do not use when: you have not yet found the document — call `machinelibrary_search`
+        first to obtain a real `source_uri`. Do not guess DOIs.
 
         Returns title, authors, a bounded abstract and body, and up to 50 references with URIs.
         Full text defaults to 40K characters and can be raised to 100K. Citation backlinks are
@@ -714,7 +665,7 @@ def setup_tools(mcp: FastMCP):
             raise ToolError(
                 f'No document with URI {supplied_uri!r}. The DOI may not yet be in our corpus — '
                 'crawls of newly cited DOIs are queued in the background; retry in a few minutes. '
-                'For non-academic sources, try `machinelibrary_search_social`.'
+                'Find the document with `machinelibrary_search` and copy its `source_uri`.'
             )
         referenced_by = [_hit_to_result(item) for item in (referenced_by_data.get('hits') or [])]
         return _doc_to_full(doc, referenced_by, max_chars)

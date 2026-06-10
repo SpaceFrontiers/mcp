@@ -16,12 +16,8 @@
   },
   "tools": [
     {
-      "name": "machinelibrary_search_documents",
-      "description": "Search papers, books, patents, standards, Wikipedia, and YouTube transcripts. Defaults to 10 compact, reranked hits."
-    },
-    {
-      "name": "machinelibrary_search_social",
-      "description": "Search Reddit, Telegram, and Discord. Defaults to 10 compact, reranked hits."
+      "name": "machinelibrary_search",
+      "description": "Search papers, books, patents, standards, Wikipedia, YouTube transcripts, Reddit, Telegram, and Discord in one ranked list. Defaults to 10 compact, reranked hits."
     },
     {
       "name": "machinelibrary_fetch_document",
