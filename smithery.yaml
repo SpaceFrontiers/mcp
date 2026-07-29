@@ -2,7 +2,7 @@
 # https://smithery.ai/docs/build/project-config/smithery.yaml
 #
 # This server is hosted; Smithery does not need to build a container.
-# Users authenticate with a Bearer API key (OAuth coming soon).
+# Smithery forwards a Bearer API key; direct MCP clients may use hosted OAuth.
 
 startCommand:
   type: http

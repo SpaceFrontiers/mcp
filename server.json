@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.SpaceFrontiers/mcp",
-  "description": "Full-text retrieval: papers, books, patents, Wikipedia, Reddit, Telegram, YouTube. With citations.",
-  "version": "0.2.1",
+  "description": "Citable retrieval across papers, books, patents, Wikipedia, and live social sources.",
+  "version": "0.3.0",
   "status": "active",
   "repository": {
     "url": "https://github.com/SpaceFrontiers/mcp",
@@ -18,7 +18,7 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "tool": "manual",
-      "version": "0.2.0"
+      "version": "0.3.0"
     }
   }
 }

@@ -1,42 +1,43 @@
 {
   "name": "spacefrontiers",
   "display_name": "Space Frontiers",
-  "description": "Full-text retrieval over peer-reviewed papers, books, patents, Wikipedia, Reddit, Telegram, and YouTube. Four read-only tools return canonical source URIs for citation.",
+  "description": "Compact, reranked retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Four read-only tools return canonical source URIs for citation.",
   "url": "https://mcp.spacefrontiers.org",
   "transport": "streamable-http",
   "auth": {
     "type": "oauth2",
-    "oauth_metadata_url": "https://mcp.spacefrontiers.org/.well-known/oauth-authorization-server",
+    "oauth_metadata_url": "https://api.spacefrontiers.org/.well-known/oauth-authorization-server",
     "protected_resource_url": "https://mcp.spacefrontiers.org/.well-known/oauth-protected-resource",
     "fallback_bearer": true
   },
   "install": {
-    "claude_code": "claude mcp add --transport http spacefrontiers https://mcp.spacefrontiers.org",
+    "claude_code": "claude mcp add --transport http --scope user spacefrontiers https://mcp.spacefrontiers.org",
     "instructions_url": "https://spacefrontiers.org/install.md"
   },
   "tools": [
     {
       "name": "spacefrontiers_search_documents",
-      "description": "Search peer-reviewed papers, books, patents, and Wikipedia. Use for citations and prior art."
+      "description": "Search papers, books, patents, standards, and Wikipedia. Defaults to 10 compact, reranked hits."
     },
     {
       "name": "spacefrontiers_search_social",
-      "description": "Search Reddit, Telegram channels, and YouTube transcripts. Use for news and community discussion."
+      "description": "Search Reddit, Telegram, Discord, and YouTube transcripts. Defaults to 10 compact, reranked hits."
     },
     {
       "name": "spacefrontiers_fetch_document",
-      "description": "Retrieve full text + references for one document by canonical URI (DOI, arXiv, ISBN, PMID, ...)."
+      "description": "Retrieve bounded full text + references for one document by canonical URI."
     },
     {
       "name": "spacefrontiers_search_in_document",
-      "description": "Find passages within one document by text query. Use for documents over ~20K tokens."
+      "description": "Find up to five bounded passages within one document by text query."
     }
   ],
   "categories": ["research", "academic", "search", "retrieval"],
   "pricing": {
     "model": "per-request",
-    "search": "$0.005",
-    "fetch": "$0.005",
+    "search": "$0.01 + $0.001 per returned result",
+    "fetch": "$0.05",
+    "search_in_document": "$0.015",
     "free_tier": false,
     "payment_url": "https://spacefrontiers.org/payments"
   },

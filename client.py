@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -11,6 +13,7 @@ from auth import auth_headers_var
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CONTENT_LENGTH = 40_000
 MAX_CONTENT_LENGTH = 100_000
 
 
@@ -46,6 +49,11 @@ class SearchV2Client:
             for key in ('x-user-id', 'x-organization-id'):
                 if value := auth.get(key):
                     headers[key] = value
+        elif api_key := os.environ.get('SPACE_FRONTIERS_API_KEY'):
+            # `fastmcp run mcp_server.py` uses stdio and therefore does not pass
+            # through the HTTP auth middleware. This fallback makes the
+            # documented self-hosted command authenticate upstream correctly.
+            headers['x-api-key'] = api_key
         return headers
 
     # ------------------------------------------------------------------
@@ -56,20 +64,23 @@ class SearchV2Client:
         self,
         query: str,
         *,
-        limit: int = 30,
+        limit: int = 10,
+        offset: int = 0,
         index_names: list[str] | None = None,
         filter_types: list[str] | None = None,
         filter_issns: list[str] | None = None,
         filter_uri_prefixes: list[str] | None = None,
         filter_issued_after: int | None = None,
         filter_issued_before: int | None = None,
+        referenced_by_uri: str | None = None,
     ) -> dict[str, Any]:
-        """POST /v2/search — sparse search with snippet extraction."""
+        """POST /v2/search — use the API's current hybrid/reranking defaults."""
         body: dict[str, Any] = {
             'query': query,
-            'mode': 'sparse',
             'limit': limit,
         }
+        if offset:
+            body['offset'] = offset
         if index_names:
             body['index_names'] = index_names
         if filter_types:
@@ -82,6 +93,8 @@ class SearchV2Client:
             body['filter_issued_after'] = filter_issued_after
         if filter_issued_before is not None:
             body['filter_issued_before'] = filter_issued_before
+        if referenced_by_uri:
+            body['referenced_by_uri'] = referenced_by_uri
 
         async with self._session.post(
             f'{self._base_url}/v2/search/',
@@ -102,18 +115,12 @@ class SearchV2Client:
         limit: int = 10,
     ) -> dict[str, Any]:
         """POST /v2/search with referenced_by_uri — find docs that reference *uri*."""
-        body: dict[str, Any] = {
-            'query': '',
-            'referenced_by_uri': uri,
-            'limit': limit,
-        }
-        async with self._session.post(
-            f'{self._base_url}/v2/search/',
-            json=body,
-            headers=self._get_headers(),
-        ) as resp:
-            _check_response(resp)
-            return await resp.json()
+        return await self.search(
+            '',
+            limit=limit,
+            index_names=['documents'],
+            referenced_by_uri=uri,
+        )
 
     # ------------------------------------------------------------------
     # Fetch document
@@ -129,8 +136,9 @@ class SearchV2Client:
         params: dict[str, str] = {}
         if text_filter:
             params['text_filter'] = text_filter
+        encoded_uri = quote(uri, safe='')
         async with self._session.get(
-            f'{self._base_url}/v2/search/documents/by-uri/{uri}',
+            f'{self._base_url}/v2/search/documents/by-uri/{encoded_uri}',
             params=params,
             headers=self._get_headers(),
         ) as resp:
