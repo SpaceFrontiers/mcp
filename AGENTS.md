@@ -6,8 +6,8 @@ This is the source for the Machine Library MCP server, deployed at `https://mcp.
 
 Exposes four read-only, idempotent tools that wrap the Machine Library search API:
 
-- `spacefrontiers_search_documents` — peer-reviewed papers, books, patents, Wikipedia
-- `spacefrontiers_search_social` — Reddit, Telegram channels, YouTube transcripts
+- `spacefrontiers_search_documents` — papers, books, patents, standards, Wikipedia, YouTube transcripts
+- `spacefrontiers_search_social` — Reddit, Telegram channels, Discord
 - `spacefrontiers_fetch_document` — full text + references for one canonical URI
 - `spacefrontiers_search_in_document` — passages within one document by query
 

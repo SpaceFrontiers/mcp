@@ -47,11 +47,11 @@ mcp = FastMCP(
     lifespan=app_lifespan,
     instructions=(
         'Machine Library by Space Frontiers Company is a full-text retrieval layer over two corpora:\n'
-        '  - documents — papers, books, patents, standards, and Wikipedia\n'
-        '  - social    — Reddit, Telegram, Discord, and YouTube transcripts\n\n'
+        '  - documents — papers, books, patents, standards, Wikipedia, and YouTube transcripts\n'
+        '  - social    — Reddit, Telegram, and Discord\n\n'
         'Tool map:\n'
-        '  - spacefrontiers_search_documents — papers/books/patents/standards/Wikipedia\n'
-        '  - spacefrontiers_search_social    — Reddit/Telegram/Discord/YouTube\n'
+        '  - spacefrontiers_search_documents — papers/books/patents/standards/Wikipedia/YouTube transcripts\n'
+        '  - spacefrontiers_search_social    — Reddit/Telegram/Discord\n'
         '  - spacefrontiers_fetch_document   — bounded full text + references for one URI\n'
         '  - spacefrontiers_search_in_document — up to five passages within one document\n\n'
         'Default workflow: run 2-3 focused searches with varied phrasings, then '
