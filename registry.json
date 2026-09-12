@@ -1,17 +1,17 @@
 {
   "name": "spacefrontiers",
-  "display_name": "Space Frontiers",
+  "display_name": "Machine Library by Space Frontiers",
   "description": "Compact, reranked retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Four read-only tools return canonical source URIs for citation.",
-  "url": "https://mcp.spacefrontiers.org",
+  "url": "https://mcp.machinelibrary.ai",
   "transport": "streamable-http",
   "auth": {
     "type": "oauth2",
     "oauth_metadata_url": "https://api.spacefrontiers.org/.well-known/oauth-authorization-server",
-    "protected_resource_url": "https://mcp.spacefrontiers.org/.well-known/oauth-protected-resource",
+    "protected_resource_url": "https://mcp.machinelibrary.ai/.well-known/oauth-protected-resource",
     "fallback_bearer": true
   },
   "install": {
-    "claude_code": "claude mcp add --transport http --scope user spacefrontiers https://mcp.spacefrontiers.org",
+    "claude_code": "claude mcp add --transport http --scope user spacefrontiers https://mcp.machinelibrary.ai",
     "instructions_url": "https://spacefrontiers.org/install.md"
   },
   "tools": [

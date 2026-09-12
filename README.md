@@ -1,11 +1,15 @@
-# Space Frontiers MCP Server
+# Machine Library MCP Server
+
+Machine Library is the search and AI product by **Space Frontiers Company**.
+Existing accounts, API keys, and `spacefrontiers_*` tool names remain compatible.
+The original `https://mcp.spacefrontiers.org` endpoint is still supported.
 
 A retrieval layer for AI agents over peer-reviewed papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Returns bounded full text and canonical source URIs for citation.
 
-Hosted at **https://mcp.spacefrontiers.org/** (Streamable HTTP transport, OAuth 2.1 with PKCE or Bearer API key).
+Hosted at **https://mcp.machinelibrary.ai/** (Streamable HTTP transport, OAuth 2.1 with PKCE or Bearer API key).
 
 <a href="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp/badge" alt="Space Frontiers MCP" />
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@SpaceFrontiers/mcp/badge" alt="Machine Library MCP" />
 </a>
 
 ## Tools
@@ -28,7 +32,7 @@ The hosted server has its own [/mcp install page](https://spacefrontiers.org/mcp
 ### Claude Code (recommended)
 
 ```sh
-claude mcp add --transport http --scope user spacefrontiers https://mcp.spacefrontiers.org
+claude mcp add --transport http --scope user spacefrontiers https://mcp.machinelibrary.ai
 ```
 
 On first use a browser opens for OAuth login — no API key paste required.
@@ -40,7 +44,7 @@ On first use a browser opens for OAuth login — no API key paste required.
   "mcpServers": {
     "spacefrontiers": {
       "type": "http",
-      "url": "https://mcp.spacefrontiers.org",
+      "url": "https://mcp.machinelibrary.ai",
       "headers": { "Authorization": "Bearer YOUR_API_KEY" }
     }
   }
@@ -55,10 +59,18 @@ Get an API key at https://spacefrontiers.org/keys.
 git clone https://github.com/SpaceFrontiers/mcp.git
 cd mcp
 uv sync
+SEARCH_API_ENDPOINT=https://api.machinelibrary.ai \
 SPACE_FRONTIERS_API_KEY=sf_live_xxx uv run fastmcp run mcp_server.py
 ```
 
 The environment variable is used as the upstream API credential in stdio mode.
+The command selects the public Machine Library API with `SEARCH_API_ENDPOINT`.
+The internal default remains `http://search-api` for existing deployments.
+For HTTP deployments, set `SEARCH_API_ENDPOINT` to your trusted internal
+search API and `USERS_API_ENDPOINT` to your internal users API; the auth
+middleware forwards verified identity headers to that internal service.
+OAuth continues to use the Space Frontiers
+authorization server at `https://api.spacefrontiers.org` and the existing sign-in site.
 
 ## Pricing
 

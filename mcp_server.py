@@ -20,7 +20,7 @@ from tools import setup_tools
 # Single source of truth for public URLs (overridable for staging/dev).
 # OAuth runs on api.spacefrontiers.org (no Cloudflare JS challenge for
 # programmatic clients); the consent UI runs on spacefrontiers.org (browser).
-MCP_PUBLIC_URL = os.environ.get('MCP_PUBLIC_URL', 'https://mcp.spacefrontiers.org')
+MCP_PUBLIC_URL = os.environ.get('MCP_PUBLIC_URL', 'https://mcp.machinelibrary.ai')
 SF_PUBLIC_URL = os.environ.get('SF_PUBLIC_URL', 'https://spacefrontiers.org')
 SF_API_PUBLIC_URL = os.environ.get('SF_API_PUBLIC_URL', 'https://api.spacefrontiers.org')
 
@@ -43,10 +43,10 @@ async def app_lifespan(_: FastMCP) -> AsyncIterator[AppContext]:
 
 
 mcp = FastMCP(
-    'Space Frontiers MCP Server',
+    'Machine Library MCP Server',
     lifespan=app_lifespan,
     instructions=(
-        'Space Frontiers is a full-text retrieval layer over two corpora:\n'
+        'Machine Library by Space Frontiers Company is a full-text retrieval layer over two corpora:\n'
         '  - documents — papers, books, patents, standards, and Wikipedia\n'
         '  - social    — Reddit, Telegram, Discord, and YouTube transcripts\n\n'
         'Tool map:\n'

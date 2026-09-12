@@ -1,4 +1,4 @@
-# smithery.yaml — Space Frontiers MCP server
+# smithery.yaml — Machine Library MCP server
 # https://smithery.ai/docs/build/project-config/smithery.yaml
 #
 # This server is hosted; Smithery does not need to build a container.
@@ -6,7 +6,7 @@
 
 startCommand:
   type: http
-  url: "https://mcp.spacefrontiers.org/"
+  url: "https://mcp.machinelibrary.ai/"
 
 configSchema:
   type: object
@@ -14,7 +14,7 @@ configSchema:
   properties:
     apiKey:
       type: string
-      title: "Space Frontiers API key"
+      title: "Machine Library API key"
       description: "Get a key at https://spacefrontiers.org/keys. Sent as `Authorization: Bearer <key>`."
       x-from: header
       x-header-name: "Authorization"
