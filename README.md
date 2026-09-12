@@ -27,7 +27,7 @@ Search defaults to 10 compact, hybrid-ranked results and is capped at 30. Every 
 
 ## Install
 
-The hosted server has its own [/mcp install page](https://spacefrontiers.org/mcp) with one-click links for Cursor, VS Code, and Smithery.
+The hosted server has its own [/mcp install page](https://machinelibrary.ai/mcp) with one-click links for Cursor, VS Code, and Smithery.
 
 ### Claude Code (recommended)
 
@@ -51,7 +51,7 @@ On first use a browser opens for OAuth login — no API key paste required.
 }
 ```
 
-Get an API key at https://spacefrontiers.org/keys.
+Get an API key at https://machinelibrary.ai/keys.
 
 ### Self-hosted (stdio)
 
@@ -79,7 +79,7 @@ authorization server at `https://api.spacefrontiers.org` and the existing sign-i
 - In-document passage search: $0.015.
 - `referenced_by_limit > 0` on a fetch adds a separately billed search.
 
-Add credits at https://spacefrontiers.org/payments.
+Add credits at https://machinelibrary.ai/payments.
 
 ## Repository layout
 
