@@ -1,4 +1,4 @@
-"""Tests for the four spacefrontiers_* MCP tools.
+"""Tests for the four machinelibrary_* MCP tools.
 
 Verifies tool registration, parameter pass-through to SearchV2Client, the
 Pydantic output schemas, and billing/auth error envelopes.
@@ -82,10 +82,10 @@ def _tool_obj(mcp: FastMCP, name: str):
 @pytest.mark.parametrize(
     'tool_name',
     [
-        'spacefrontiers_search_documents',
-        'spacefrontiers_search_social',
-        'spacefrontiers_fetch_document',
-        'spacefrontiers_search_in_document',
+        'machinelibrary_search_documents',
+        'machinelibrary_search_social',
+        'machinelibrary_fetch_document',
+        'machinelibrary_search_in_document',
     ],
 )
 def test_tools_registered_with_namespace(tool_name):
@@ -98,10 +98,10 @@ def test_tools_have_read_only_annotations():
     mcp = FastMCP('test')
     setup_tools(mcp)
     for name in (
-        'spacefrontiers_search_documents',
-        'spacefrontiers_search_social',
-        'spacefrontiers_fetch_document',
-        'spacefrontiers_search_in_document',
+        'machinelibrary_search_documents',
+        'machinelibrary_search_social',
+        'machinelibrary_fetch_document',
+        'machinelibrary_search_in_document',
     ):
         annotations = _tool_obj(mcp, name).annotations
         assert annotations is not None
@@ -114,22 +114,22 @@ def test_tools_publish_valid_output_schemas_and_bounded_defaults():
     mcp = FastMCP('test')
     setup_tools(mcp)
     for name in (
-        'spacefrontiers_search_documents',
-        'spacefrontiers_search_social',
-        'spacefrontiers_fetch_document',
-        'spacefrontiers_search_in_document',
+        'machinelibrary_search_documents',
+        'machinelibrary_search_social',
+        'machinelibrary_fetch_document',
+        'machinelibrary_search_in_document',
     ):
         tool = _tool_obj(mcp, name)
         assert tool.output_schema is not None
         Draft202012Validator.check_schema(tool.output_schema)
 
-    for name in ('spacefrontiers_search_documents', 'spacefrontiers_search_social'):
+    for name in ('machinelibrary_search_documents', 'machinelibrary_search_social'):
         properties = _tool_obj(mcp, name).parameters['properties']
         assert properties['limit']['default'] == 10
         assert properties['limit']['maximum'] == 30
         assert properties['offset']['default'] == 0
 
-    fetch_properties = _tool_obj(mcp, 'spacefrontiers_fetch_document').parameters['properties']
+    fetch_properties = _tool_obj(mcp, 'machinelibrary_fetch_document').parameters['properties']
     assert fetch_properties['max_chars']['default'] == 40_000
     assert fetch_properties['referenced_by_limit']['default'] == 0
 
@@ -142,7 +142,7 @@ def test_tools_publish_valid_output_schemas_and_bounded_defaults():
 @pytest.mark.asyncio
 async def test_search_documents_pins_index_to_documents():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
     await fn(ctx=ctx, query='quantum computing')
     kwargs = client.search.call_args.kwargs
     assert kwargs['index_names'] == ['documents']
@@ -152,7 +152,7 @@ async def test_search_documents_pins_index_to_documents():
 @pytest.mark.asyncio
 async def test_search_documents_passes_filters():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
     await fn(
         ctx=ctx,
         query='crispr',
@@ -185,7 +185,7 @@ async def test_search_documents_returns_typed_results():
         'total_hits': 1,
     }
     mcp, _, ctx = _build_mcp_with_mocks(search_return=raw)
-    fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
     result = await fn(ctx=ctx, query='test')
     assert isinstance(result, SearchResults)
     assert result.index == 'documents'
@@ -221,7 +221,7 @@ async def test_search_defaults_are_compact_and_paginates():
         'total_hits': 50,
     }
     mcp, client, ctx = _build_mcp_with_mocks(search_return=raw)
-    fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
     result = await fn(ctx=ctx, query='test', offset=10)
     assert client.search.call_args.kwargs['limit'] == 10
     assert client.search.call_args.kwargs['offset'] == 10
@@ -233,7 +233,7 @@ async def test_search_defaults_are_compact_and_paginates():
 @pytest.mark.asyncio
 async def test_search_rejects_empty_query_without_filters():
     mcp, _, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
     with pytest.raises(ToolError, match='query may be empty'):
         await fn(ctx=ctx)
 
@@ -246,7 +246,7 @@ async def test_search_rejects_empty_query_without_filters():
 @pytest.mark.asyncio
 async def test_search_social_pins_index_to_social():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'spacefrontiers_search_social')
+    fn = _tool_fn(mcp, 'machinelibrary_search_social')
     await fn(ctx=ctx, query='breaking news')
     kwargs = client.search.call_args.kwargs
     assert kwargs['index_names'] == ['social']
@@ -255,7 +255,7 @@ async def test_search_social_pins_index_to_social():
 @pytest.mark.asyncio
 async def test_search_social_passes_uri_prefix_filter():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'spacefrontiers_search_social')
+    fn = _tool_fn(mcp, 'machinelibrary_search_social')
     await fn(
         ctx=ctx,
         query='launch',
@@ -270,7 +270,7 @@ async def test_search_social_passes_uri_prefix_filter():
 @pytest.mark.asyncio
 async def test_search_social_browse_subreddit_with_empty_query():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'spacefrontiers_search_social')
+    fn = _tool_fn(mcp, 'machinelibrary_search_social')
     await fn(
         ctx=ctx,
         filter_uri_prefixes=['https://reddit.com/r/MachineLearning/'],
@@ -300,7 +300,7 @@ async def test_fetch_document_returns_typed_full_document():
         },
     }
     mcp, client, ctx = _build_mcp_with_mocks(fetch_return=raw_doc)
-    fn = _tool_fn(mcp, 'spacefrontiers_fetch_document')
+    fn = _tool_fn(mcp, 'machinelibrary_fetch_document')
     result = await fn(ctx=ctx, uri='https://doi.org/10.1234/test')
     assert isinstance(result, FullDocument)
     assert result.title == 'A Paper'
@@ -320,7 +320,7 @@ async def test_fetch_document_backlinks_are_opt_in():
         'document': {'title': 'A Paper', 'content': 'body'},
     }
     mcp, client, ctx = _build_mcp_with_mocks(fetch_return=raw_doc)
-    fn = _tool_fn(mcp, 'spacefrontiers_fetch_document')
+    fn = _tool_fn(mcp, 'machinelibrary_fetch_document')
     await fn(
         ctx=ctx,
         uri='https://doi.org/10.1234/test',
@@ -336,7 +336,7 @@ async def test_fetch_document_honors_explicit_content_budget():
         'document': {'title': 'A Paper', 'content': 'x' * 60_000},
     }
     mcp, _, ctx = _build_mcp_with_mocks(fetch_return=raw_doc)
-    fn = _tool_fn(mcp, 'spacefrontiers_fetch_document')
+    fn = _tool_fn(mcp, 'machinelibrary_fetch_document')
     result = await fn(
         ctx=ctx,
         uri='https://doi.org/10.1234/test',
@@ -357,7 +357,7 @@ async def test_fetch_document_truncates_long_content():
         },
     }
     mcp, _, ctx = _build_mcp_with_mocks(fetch_return=raw_doc)
-    fn = _tool_fn(mcp, 'spacefrontiers_fetch_document')
+    fn = _tool_fn(mcp, 'machinelibrary_fetch_document')
     result = await fn(ctx=ctx, uri='https://doi.org/10.1234/test')
     assert isinstance(result, FullDocument)
     assert result.content_truncated is True
@@ -368,7 +368,7 @@ async def test_fetch_document_truncates_long_content():
 @pytest.mark.asyncio
 async def test_fetch_document_missing_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(fetch_return=None)
-    fn = _tool_fn(mcp, 'spacefrontiers_fetch_document')
+    fn = _tool_fn(mcp, 'machinelibrary_fetch_document')
     with pytest.raises(ToolError) as exc:
         await fn(ctx=ctx, uri='https://doi.org/10.1234/missing')
     assert 'No document with URI' in str(exc.value)
@@ -394,7 +394,7 @@ async def test_search_in_document_returns_passages():
         ],
     }
     mcp, _, ctx = _build_mcp_with_mocks(fetch_return=snippets_data)
-    fn = _tool_fn(mcp, 'spacefrontiers_search_in_document')
+    fn = _tool_fn(mcp, 'machinelibrary_search_in_document')
     result = await fn(ctx=ctx, uri='https://doi.org/10.1234/test', query='match')
     assert isinstance(result, DocumentPassages)
     assert result.title == 'Big Paper'
@@ -427,7 +427,7 @@ async def test_youtube_passages_use_document_lookup(uri):
             ],
         },
     )
-    result = await _tool_fn(mcp, 'spacefrontiers_search_in_document')(
+    result = await _tool_fn(mcp, 'machinelibrary_search_in_document')(
         ctx=ctx,
         uri=uri,
         query='lecture evidence',
@@ -447,7 +447,7 @@ async def test_search_in_document_does_not_fetch_full_body_when_no_passages():
 
     mcp, client, ctx = _build_mcp_with_mocks()
     client.get_document_by_uri = AsyncMock(side_effect=get_doc_side_effect)
-    fn = _tool_fn(mcp, 'spacefrontiers_search_in_document')
+    fn = _tool_fn(mcp, 'machinelibrary_search_in_document')
     result = await fn(ctx=ctx, uri='https://doi.org/10.1234/test', query='nothing-matches')
     assert isinstance(result, DocumentPassages)
     assert result.passages == []
@@ -464,21 +464,21 @@ async def test_search_in_document_does_not_fetch_full_body_when_no_passages():
 @pytest.mark.asyncio
 async def test_insufficient_funds_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(search_side_effect=InsufficientFundsError())
-    fn = _tool_fn(mcp, 'spacefrontiers_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
     with pytest.raises(ToolError) as exc:
         await fn(ctx=ctx, query='anything')
     assert 'Insufficient funds' in str(exc.value)
-    assert 'spacefrontiers.org/payments' in str(exc.value)
+    assert 'machinelibrary.ai/payments' in str(exc.value)
 
 
 @pytest.mark.asyncio
 async def test_authentication_error_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(search_side_effect=AuthenticationError())
-    fn = _tool_fn(mcp, 'spacefrontiers_search_social')
+    fn = _tool_fn(mcp, 'machinelibrary_search_social')
     with pytest.raises(ToolError) as exc:
         await fn(ctx=ctx, query='anything')
     assert 'Authentication failed' in str(exc.value)
-    assert 'spacefrontiers.org/keys' in str(exc.value)
+    assert 'machinelibrary.ai/keys' in str(exc.value)
 
 
 # ---------------------------------------------------------------------------

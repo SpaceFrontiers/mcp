@@ -18,11 +18,11 @@ from resources import setup_resources
 from tools import setup_tools
 
 # Single source of truth for public URLs (overridable for staging/dev).
-# OAuth runs on api.spacefrontiers.org (no Cloudflare JS challenge for
-# programmatic clients); the consent UI runs on spacefrontiers.org (browser).
+# OAuth runs on api.machinelibrary.ai (no Cloudflare JS challenge for
+# programmatic clients); the consent UI runs on machinelibrary.ai (browser).
 MCP_PUBLIC_URL = os.environ.get('MCP_PUBLIC_URL', 'https://mcp.machinelibrary.ai')
-SF_PUBLIC_URL = os.environ.get('SF_PUBLIC_URL', 'https://spacefrontiers.org')
-SF_API_PUBLIC_URL = os.environ.get('SF_API_PUBLIC_URL', 'https://api.spacefrontiers.org')
+SF_PUBLIC_URL = os.environ.get('SF_PUBLIC_URL', 'https://machinelibrary.ai')
+SF_API_PUBLIC_URL = os.environ.get('SF_API_PUBLIC_URL', 'https://api.machinelibrary.ai')
 
 
 @dataclass
@@ -50,10 +50,10 @@ mcp = FastMCP(
         '  - documents — papers, books, patents, standards, Wikipedia, and YouTube transcripts\n'
         '  - social    — Reddit, Telegram, and Discord\n\n'
         'Tool map:\n'
-        '  - spacefrontiers_search_documents — papers/books/patents/standards/Wikipedia/YouTube transcripts\n'
-        '  - spacefrontiers_search_social    — Reddit/Telegram/Discord\n'
-        '  - spacefrontiers_fetch_document   — bounded full text + references for one URI\n'
-        '  - spacefrontiers_search_in_document — up to five passages within one document\n\n'
+        '  - machinelibrary_search_documents — papers/books/patents/standards/Wikipedia/YouTube transcripts\n'
+        '  - machinelibrary_search_social    — Reddit/Telegram/Discord\n'
+        '  - machinelibrary_fetch_document   — bounded full text + references for one URI\n'
+        '  - machinelibrary_search_in_document — up to five passages within one document\n\n'
         'Default workflow: run 2-3 focused searches with varied phrasings, then '
         'fetch only strong candidates by `source_uri`. Search defaults to ten '
         'compact, reranked hits. For '

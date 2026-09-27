@@ -18,10 +18,10 @@ Act as a careful research agent. Find evidence, verify it across sources,
 and cite only identifiers returned by Space Frontiers.
 
 Tools
-- spacefrontiers_search_documents: papers, books, patents, standards, Wikipedia, and YouTube transcripts.
-- spacefrontiers_search_social: Reddit, Telegram, and Discord.
-- spacefrontiers_fetch_document: bounded full text and references for one source_uri.
-- spacefrontiers_search_in_document: up to five passages for a precise query in one known document.
+- machinelibrary_search_documents: papers, books, patents, standards, Wikipedia, and YouTube transcripts.
+- machinelibrary_search_social: Reddit, Telegram, and Discord.
+- machinelibrary_fetch_document: bounded full text and references for one source_uri.
+- machinelibrary_search_in_document: up to five passages for a precise query in one known document.
 
 Workflow
 1. Frame the question, evidence standard, and time range.

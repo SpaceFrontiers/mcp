@@ -1,8 +1,10 @@
 # Machine Library MCP Server
 
-Machine Library is the search and AI product by **Space Frontiers Company**.
-Existing accounts, API keys, and `spacefrontiers_*` tool names remain compatible.
-The original `https://mcp.spacefrontiers.org` endpoint is still supported.
+Official MCP server for Machine Library, the search and AI product by **Space Frontiers Company**.
+
+- **Endpoint:** `https://mcp.machinelibrary.ai` (canonical)
+- **Server name:** `machinelibrary`; tools are prefixed `machinelibrary_`
+- **Agent install guide:** https://machinelibrary.ai/install.md
 
 A retrieval layer for AI agents over peer-reviewed papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Returns bounded full text and canonical source URIs for citation.
 
@@ -17,16 +19,16 @@ Includes exact tool calls and observations from a live run, plus a small evaluat
 
 ## Tools
 
-The four core retrieval tools below are read-only, idempotent, and prefixed `spacefrontiers_` to avoid collisions in multi-server agent setups. The hosted service may expose additional tools; inspect its current `tools/list`. In particular, the optional `spacefrontiers_top_up_balance` capability purchases prepaid credits and is not a read-only retrieval tool.
+The four core retrieval tools below are read-only, idempotent, and prefixed `machinelibrary_` to avoid collisions in multi-server agent setups. This repository implements them. The hosted server also exposes `machinelibrary_research` (cited research answers), `machinelibrary_search_feedback`, `machinelibrary_comment_on_document`, and `machinelibrary_top_up_balance` (purchases prepaid credits; not read-only); see the [tool guide](https://machinelibrary.ai/mcp) or its `tools/list`.
 
 | Tool | When to use |
 |------|-------------|
-| `spacefrontiers_search_documents` | Papers, books, patents, standards, Wikipedia, YouTube transcripts. Use for citations and prior art. |
-| `spacefrontiers_search_social` | Reddit, Telegram channels, Discord. Use for news and community discussion. |
-| `spacefrontiers_fetch_document` | Bounded full text + up to 50 references for one canonical URI. Defaults to 40K characters; supports up to 100K. |
-| `spacefrontiers_search_in_document` | Up to five matching passages within one document. Use for documents over ~20K tokens. |
+| `machinelibrary_search_documents` | Papers, books, patents, standards, Wikipedia, YouTube transcripts. Use for citations and prior art. |
+| `machinelibrary_search_social` | Reddit, Telegram channels, Discord. Use for news and community discussion. |
+| `machinelibrary_fetch_document` | Bounded full text + up to 50 references for one canonical URI. Defaults to 40K characters; supports up to 100K. |
+| `machinelibrary_search_in_document` | Up to five matching passages within one document. Use for documents over ~20K tokens. |
 
-Search defaults to 10 compact, hybrid-ranked results and is capped at 30. Every hit includes a canonical `source_uri`, one snippet (up to 900 characters), an abstract preview (up to 800 characters), score, authors, date, type, and estimated full-text size. Citation backlinks are opt-in on `spacefrontiers_fetch_document` because they add another billed search.
+Search defaults to 10 compact, hybrid-ranked results and is capped at 30. Every hit includes a canonical `source_uri`, one snippet (up to 900 characters), an abstract preview (up to 800 characters), score, authors, date, type, and estimated full-text size. Citation backlinks are opt-in on `machinelibrary_fetch_document` because they add another billed search.
 
 ## Install
 
@@ -35,7 +37,7 @@ The hosted server has its own [/mcp install page](https://machinelibrary.ai/mcp)
 ### Claude Code (recommended)
 
 ```sh
-claude mcp add --transport http --scope user spacefrontiers https://mcp.machinelibrary.ai
+claude mcp add --transport http --scope user machinelibrary https://mcp.machinelibrary.ai
 ```
 
 On first use a browser opens for OAuth login — no API key paste required.
@@ -45,7 +47,7 @@ On first use a browser opens for OAuth login — no API key paste required.
 ```json
 {
   "mcpServers": {
-    "spacefrontiers": {
+    "machinelibrary": {
       "type": "http",
       "url": "https://mcp.machinelibrary.ai",
       "headers": { "Authorization": "Bearer YOUR_API_KEY" }
@@ -72,9 +74,8 @@ The internal default remains `http://search-api` for existing deployments.
 For HTTP deployments, set `SEARCH_API_ENDPOINT` to your trusted internal
 search API and `USERS_API_ENDPOINT` to your internal users API; the auth
 middleware forwards verified identity headers to that internal service.
-OAuth retains the compatible authorization-server issuer at
-`https://api.spacefrontiers.org`; browser sign-in for the new product uses
-`https://machinelibrary.ai` with the same accounts.
+OAuth uses the `https://api.machinelibrary.ai` authorization server and
+browser sign-in at `https://machinelibrary.ai`.
 
 ## Pricing
 
@@ -116,6 +117,13 @@ uv run ruff check .
 ```
 
 mcp-name: io.github.SpaceFrontiers/mcp
+
+## Compatibility
+
+Existing accounts and API keys work unchanged. The hosted server still accepts
+legacy `spacefrontiers_*` tool calls and the former
+`https://mcp.spacefrontiers.org` endpoint; new setups should use the
+`machinelibrary` names and `https://mcp.machinelibrary.ai`.
 
 ## License
 

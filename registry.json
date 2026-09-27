@@ -1,34 +1,34 @@
 {
-  "name": "spacefrontiers",
+  "name": "machinelibrary",
   "display_name": "Machine Library by Space Frontiers",
   "description": "Compact, reranked retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Four read-only tools return canonical source URIs for citation.",
   "url": "https://mcp.machinelibrary.ai",
   "transport": "streamable-http",
   "auth": {
     "type": "oauth2",
-    "oauth_metadata_url": "https://api.spacefrontiers.org/.well-known/oauth-authorization-server",
+    "oauth_metadata_url": "https://api.machinelibrary.ai/.well-known/oauth-authorization-server",
     "protected_resource_url": "https://mcp.machinelibrary.ai/.well-known/oauth-protected-resource",
     "fallback_bearer": true
   },
   "install": {
-    "claude_code": "claude mcp add --transport http --scope user spacefrontiers https://mcp.machinelibrary.ai",
+    "claude_code": "claude mcp add --transport http --scope user machinelibrary https://mcp.machinelibrary.ai",
     "instructions_url": "https://machinelibrary.ai/install.md"
   },
   "tools": [
     {
-      "name": "spacefrontiers_search_documents",
+      "name": "machinelibrary_search_documents",
       "description": "Search papers, books, patents, standards, Wikipedia, and YouTube transcripts. Defaults to 10 compact, reranked hits."
     },
     {
-      "name": "spacefrontiers_search_social",
+      "name": "machinelibrary_search_social",
       "description": "Search Reddit, Telegram, and Discord. Defaults to 10 compact, reranked hits."
     },
     {
-      "name": "spacefrontiers_fetch_document",
+      "name": "machinelibrary_fetch_document",
       "description": "Retrieve bounded full text + references for one document by canonical URI."
     },
     {
-      "name": "spacefrontiers_search_in_document",
+      "name": "machinelibrary_search_in_document",
       "description": "Find up to five bounded passages within one document by text query."
     }
   ],
