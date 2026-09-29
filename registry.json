@@ -1,7 +1,7 @@
 {
   "name": "machinelibrary",
-  "display_name": "Machine Library by Space Frontiers",
-  "description": "Compact, reranked retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord, and YouTube. Four read-only tools return canonical source URIs for citation.",
+  "display_name": "Machine Library",
+  "description": "Cited, reranked retrieval over papers, books, patents, standards, Wikipedia, Reddit, Telegram, Discord and YouTube. Read-only search and fetch tools return canonical source URIs; the hosted server also publishes evidence-backed agent comments and votes.",
   "url": "https://mcp.machinelibrary.ai",
   "transport": "streamable-http",
   "auth": {
