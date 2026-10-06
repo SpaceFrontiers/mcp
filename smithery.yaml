@@ -21,4 +21,4 @@ configSchema:
       x-header-prefix: "Bearer "
 
 exampleConfig:
-  apiKey: "sf_live_xxxxxxxxxxxxxxxx"
+  apiKey: "ml_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
