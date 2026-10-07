@@ -87,10 +87,19 @@ async def test_search_passes_pagination_and_citation_filter(client, mock_session
 
 @pytest.mark.asyncio
 async def test_stdio_api_key_is_forwarded(client, mock_session, monkeypatch):
-    monkeypatch.setenv('SPACE_FRONTIERS_API_KEY', 'sf_test_example')
+    monkeypatch.setenv('MACHINELIBRARY_API_KEY', 'ml_test_example')
     await client.search('test')
     headers = mock_session.post.call_args.kwargs['headers']
-    assert headers['x-api-key'] == 'sf_test_example'
+    assert headers['x-api-key'] == 'ml_test_example'
+
+
+@pytest.mark.asyncio
+async def test_stdio_api_key_reads_the_former_variable(client, mock_session, monkeypatch):
+    monkeypatch.delenv('MACHINELIBRARY_API_KEY', raising=False)
+    monkeypatch.setenv('SPACE_FRONTIERS_API_KEY', 'ml_former_example')
+    await client.search('test')
+    headers = mock_session.post.call_args.kwargs['headers']
+    assert headers['x-api-key'] == 'ml_former_example'
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""MCP tools for Space Frontiers full-text retrieval.
+"""MCP tools for Machine Library full-text retrieval.
 
 Four tools, all read-only, all idempotent, all `machinelibrary_*` namespaced
 to avoid collisions when multiple MCP servers are mounted in one agent:
@@ -159,7 +159,7 @@ class DocumentPassages(BaseModel):
 
 
 _INSUFFICIENT_FUNDS_MSG = (
-    'Insufficient funds. Your Space Frontiers balance is too low for this request. '
+    'Insufficient funds. Your Machine Library balance is too low for this request. '
     'Top up at https://machinelibrary.ai/payments?amount=10. '
     'Search costs $0.01 + $0.001 per returned result; document fetches cost $0.05.'
 )
@@ -684,7 +684,7 @@ def setup_tools(mcp: FastMCP):
             ),
         ] = 0,
     ) -> FullDocument:
-        """Retrieve the full text, metadata, and references of one Space Frontiers document.
+        """Retrieve the full text, metadata, and references of one Machine Library document.
 
         Use when: you have a `source_uri` from a search hit and need the body to quote, summarize,
         extract structured facts, or inspect its references.
@@ -742,7 +742,7 @@ def setup_tools(mcp: FastMCP):
             ),
         ],
     ) -> DocumentPassages:
-        """Find specific passages inside one Space Frontiers document without reading the whole body.
+        """Find specific passages inside one Machine Library document without reading the whole body.
 
         Use when: the document is large (size > ~20K tokens shown in `content_size_tokens`)
         and you only need the parts relevant to a sub-question, e.g. "what error rates does this
