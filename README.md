@@ -65,7 +65,7 @@ git clone https://github.com/SpaceFrontiers/mcp.git
 cd mcp
 uv sync
 SEARCH_API_ENDPOINT=https://api.machinelibrary.ai \
-SPACE_FRONTIERS_API_KEY=sf_live_xxx uv run fastmcp run mcp_server.py
+MACHINELIBRARY_API_KEY=ml_xxx uv run fastmcp run mcp_server.py
 ```
 
 The environment variable is used as the upstream API credential in stdio mode.
@@ -91,7 +91,7 @@ Add credits at https://machinelibrary.ai/payments.
 - `mcp_server.py` — Starlette + FastMCP entrypoint, OAuth well-known endpoints.
 - `tools.py` — four tools with Pydantic output schemas.
 - `prompts.py` — `deep_research_agent` prompt.
-- `resources.py` — `spacefrontiers://document/{uri_b64}` URI template.
+- `resources.py` — `machinelibrary://document/{uri_b64}` URI template.
 - `auth.py` — Bearer-token validation, Origin allowlist, MCP-Protocol-Version check.
 - `client.py` — async HTTP client for the v2 search API.
 - `server.json` — Official MCP Registry entry.
@@ -120,10 +120,12 @@ mcp-name: io.github.SpaceFrontiers/mcp
 
 ## Compatibility
 
-Existing accounts and API keys work unchanged. The hosted server still accepts
-legacy `spacefrontiers_*` tool calls and the former
-`https://mcp.spacefrontiers.org` endpoint; new setups should use the
-`machinelibrary` names and `https://mcp.machinelibrary.ai`.
+Existing accounts and API keys work unchanged, and the former
+`https://mcp.spacefrontiers.org` endpoint remains supported; new setups should
+use `https://mcp.machinelibrary.ai`. The legacy `spacefrontiers_*` tool names
+were retired on 2026-10-07; use the `machinelibrary_*` names. Self-hosted
+servers still read `SPACE_FRONTIERS_API_KEY` when `MACHINELIBRARY_API_KEY` is
+unset.
 
 ## License
 
