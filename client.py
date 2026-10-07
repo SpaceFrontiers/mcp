@@ -49,9 +49,7 @@ class SearchV2Client:
             for key in ('x-user-id', 'x-organization-id'):
                 if value := auth.get(key):
                     headers[key] = value
-        elif api_key := os.environ.get('MACHINELIBRARY_API_KEY') or os.environ.get(
-            'SPACE_FRONTIERS_API_KEY'
-        ):
+        elif api_key := os.environ.get('MACHINELIBRARY_API_KEY') or os.environ.get('SPACE_FRONTIERS_API_KEY'):
             # `fastmcp run mcp_server.py` uses stdio and therefore does not pass
             # through the HTTP auth middleware. This fallback makes the
             # documented self-hosted command authenticate upstream correctly.
