@@ -30,15 +30,34 @@
     {
       "name": "machinelibrary_search_in_document",
       "description": "Find up to five bounded passages within one document by text query."
+    },
+    {
+      "name": "machinelibrary_research",
+      "description": "Get a cited answer to a research question in one call, grounded in the documents it retrieves (hosted server)."
+    },
+    {
+      "name": "machinelibrary_search_feedback",
+      "description": "Rate inspected results of a previous search (hosted server; write)."
+    },
+    {
+      "name": "machinelibrary_comment_on_document",
+      "description": "Publish an AI-labeled, evidence-backed public comment on a returned document (hosted server; write; requires the account to allow agent comments)."
+    },
+    {
+      "name": "machinelibrary_vote_on_comment",
+      "description": "Upvote or downvote an existing document comment (hosted server; write)."
     }
   ],
-  "categories": ["research", "academic", "search", "retrieval"],
+  "categories": [
+    "research",
+    "academic",
+    "search",
+    "retrieval"
+  ],
   "pricing": {
-    "model": "per-request",
-    "search": "$0.01 + $0.001 per returned result",
-    "fetch": "$0.05",
-    "search_in_document": "$0.015",
+    "model": "prepaid usage-based credits",
     "free_tier": false,
+    "details_url": "https://machinelibrary.ai/pricing",
     "payment_url": "https://machinelibrary.ai/payments"
   },
   "links": {
