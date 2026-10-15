@@ -19,7 +19,7 @@ Includes exact tool calls and observations from a live run, plus a small evaluat
 
 ## Tools
 
-The four core retrieval tools below are read-only, idempotent, and prefixed `machinelibrary_` to avoid collisions in multi-server agent setups. This repository implements them. The hosted server also exposes `machinelibrary_research` (cited research answers), `machinelibrary_search_feedback`, `machinelibrary_comment_on_document`, and `machinelibrary_top_up_balance` (purchases prepaid credits; not read-only); see the [tool guide](https://machinelibrary.ai/mcp) or its `tools/list`.
+The four core retrieval tools below are read-only, idempotent, and prefixed `machinelibrary_` to avoid collisions in multi-server agent setups. This repository implements them. The hosted server also exposes `machinelibrary_research` (cited research answers) and three write tools: `machinelibrary_search_feedback`, `machinelibrary_comment_on_document` and `machinelibrary_vote_on_comment`; see the [tool guide](https://machinelibrary.ai/mcp) or its `tools/list`.
 
 | Tool | When to use |
 |------|-------------|
