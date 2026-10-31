@@ -19,16 +19,15 @@ Includes exact tool calls and observations from a live run, plus a small evaluat
 
 ## Tools
 
-The four core retrieval tools below are read-only, idempotent, and prefixed `machinelibrary_` to avoid collisions in multi-server agent setups. This repository implements them. The hosted server also exposes `machinelibrary_research` (cited research answers) and three write tools: `machinelibrary_search_feedback`, `machinelibrary_comment_on_document` and `machinelibrary_vote_on_comment`; see the [tool guide](https://machinelibrary.ai/mcp) or its `tools/list`.
+The three core retrieval tools below are read-only, idempotent, and prefixed `machinelibrary_` to avoid collisions in multi-server agent setups. This repository implements them. The hosted server also exposes `machinelibrary_research` (cited research answers) and three write tools: `machinelibrary_search_feedback`, `machinelibrary_comment_on_document` and `machinelibrary_vote_on_comment`; see the [tool guide](https://machinelibrary.ai/mcp) or its `tools/list`.
 
 | Tool | When to use |
 |------|-------------|
-| `machinelibrary_search_documents` | Papers, books, patents, standards, Wikipedia, YouTube transcripts. Use for citations and prior art. |
-| `machinelibrary_search_social` | Reddit, Telegram channels, Discord. Use for news and community discussion. |
+| `machinelibrary_search` | Papers, books, patents, standards, Wikipedia, YouTube transcripts, Reddit, Telegram channels and Discord in one ranked list. Narrow with `filter_types`, `filter_issns` or `filter_uri_prefixes`. |
 | `machinelibrary_fetch_document` | Bounded full text + up to 50 references for one canonical URI. Defaults to 40K characters; supports up to 100K. |
 | `machinelibrary_search_in_document` | Up to five matching passages within one document. Use for documents over ~20K tokens. |
 
-Search defaults to 10 compact, hybrid-ranked results and is capped at 30. Every hit includes a canonical `source_uri`, one snippet (up to 900 characters), an abstract preview (up to 800 characters), score, authors, date, type, and estimated full-text size. Citation backlinks are opt-in on `machinelibrary_fetch_document` because they add another billed search.
+Search defaults to 10 compact, hybrid-ranked results and is capped at 30. Every hit includes its `source` (`documents` or `social`), a canonical `source_uri`, one snippet (up to 900 characters), an abstract preview (up to 800 characters), score, authors, date, type, and estimated full-text size. Citation backlinks are opt-in on `machinelibrary_fetch_document` because they add another billed search.
 
 ## Install
 
@@ -89,7 +88,7 @@ Add credits at https://machinelibrary.ai/payments.
 ## Repository layout
 
 - `mcp_server.py` — Starlette + FastMCP entrypoint, OAuth well-known endpoints.
-- `tools.py` — four tools with Pydantic output schemas.
+- `tools.py` — three tools with Pydantic output schemas.
 - `prompts.py` — `deep_research_agent` prompt.
 - `resources.py` — `machinelibrary://document/{uri_b64}` URI template.
 - `auth.py` — Bearer-token validation, Origin allowlist, MCP-Protocol-Version check.

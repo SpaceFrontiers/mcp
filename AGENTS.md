@@ -4,10 +4,9 @@ This is the source for the Machine Library MCP server, deployed at `https://mcp.
 
 ## What it does
 
-Exposes four read-only, idempotent tools that wrap the Machine Library search API:
+Exposes three read-only, idempotent tools that wrap the Machine Library search API:
 
-- `machinelibrary_search_documents` — papers, books, patents, standards, Wikipedia, YouTube transcripts
-- `machinelibrary_search_social` — Reddit, Telegram channels, Discord
+- `machinelibrary_search` — papers, books, patents, standards, Wikipedia, YouTube transcripts, Reddit, Telegram channels, Discord
 - `machinelibrary_fetch_document` — full text + references for one canonical URI
 - `machinelibrary_search_in_document` — passages within one document by query
 

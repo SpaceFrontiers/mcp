@@ -38,7 +38,7 @@ the separate [REST documentation](https://machinelibrary.ai/docs/api).
 
 ```json
 {
-  "name": "machinelibrary_search_documents",
+  "name": "machinelibrary_search",
   "arguments": {
     "query": "retrieval augmented generation attribution citation evaluation",
     "limit": 5
