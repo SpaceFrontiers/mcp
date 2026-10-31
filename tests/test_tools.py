@@ -1,4 +1,4 @@
-"""Tests for the four machinelibrary_* MCP tools.
+"""Tests for the machinelibrary_* MCP tools.
 
 Verifies tool registration, parameter pass-through to SearchV2Client, the
 Pydantic output schemas, and billing/auth error envelopes.
@@ -82,8 +82,7 @@ def _tool_obj(mcp: FastMCP, name: str):
 @pytest.mark.parametrize(
     'tool_name',
     [
-        'machinelibrary_search_documents',
-        'machinelibrary_search_social',
+        'machinelibrary_search',
         'machinelibrary_fetch_document',
         'machinelibrary_search_in_document',
     ],
@@ -98,8 +97,7 @@ def test_tools_have_read_only_annotations():
     mcp = FastMCP('test')
     setup_tools(mcp)
     for name in (
-        'machinelibrary_search_documents',
-        'machinelibrary_search_social',
+        'machinelibrary_search',
         'machinelibrary_fetch_document',
         'machinelibrary_search_in_document',
     ):
@@ -114,8 +112,7 @@ def test_tools_publish_valid_output_schemas_and_bounded_defaults():
     mcp = FastMCP('test')
     setup_tools(mcp)
     for name in (
-        'machinelibrary_search_documents',
-        'machinelibrary_search_social',
+        'machinelibrary_search',
         'machinelibrary_fetch_document',
         'machinelibrary_search_in_document',
     ):
@@ -123,11 +120,10 @@ def test_tools_publish_valid_output_schemas_and_bounded_defaults():
         assert tool.output_schema is not None
         Draft202012Validator.check_schema(tool.output_schema)
 
-    for name in ('machinelibrary_search_documents', 'machinelibrary_search_social'):
-        properties = _tool_obj(mcp, name).parameters['properties']
-        assert properties['limit']['default'] == 10
-        assert properties['limit']['maximum'] == 30
-        assert properties['offset']['default'] == 0
+    properties = _tool_obj(mcp, 'machinelibrary_search').parameters['properties']
+    assert properties['limit']['default'] == 10
+    assert properties['limit']['maximum'] == 30
+    assert properties['offset']['default'] == 0
 
     fetch_properties = _tool_obj(mcp, 'machinelibrary_fetch_document').parameters['properties']
     assert fetch_properties['max_chars']['default'] == 40_000
@@ -135,43 +131,46 @@ def test_tools_publish_valid_output_schemas_and_bounded_defaults():
 
 
 # ---------------------------------------------------------------------------
-# search_documents
+# search
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_search_documents_pins_index_to_documents():
+async def test_search_covers_documents_and_social():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     await fn(ctx=ctx, query='quantum computing')
     kwargs = client.search.call_args.kwargs
-    assert kwargs['index_names'] == ['documents']
+    assert kwargs['index_names'] == ['documents', 'social']
     assert client.search.call_args.args == ('quantum computing',)
 
 
 @pytest.mark.asyncio
-async def test_search_documents_passes_filters():
+async def test_search_passes_filters():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     await fn(
         ctx=ctx,
         query='crispr',
         filter_issns=['0028-0836'],
         filter_types=['journal-article'],
+        filter_uri_prefixes=['@tech_news'],
         filter_issued_after=1711929600,
     )
     kwargs = client.search.call_args.kwargs
     assert kwargs['filter_issns'] == ['0028-0836']
     assert kwargs['filter_types'] == ['journal-article']
+    assert kwargs['filter_uri_prefixes'] == ['@tech_news']
     assert kwargs['filter_issued_after'] == 1711929600
 
 
 @pytest.mark.asyncio
-async def test_search_documents_returns_typed_results():
+async def test_search_returns_typed_results():
     raw = {
         'hits': [
             {
                 'score': 0.95,
+                'source': 'documents',
                 'document': {
                     'title': 'Test Paper',
                     'uris': ['https://doi.org/10.1234/test', 'doi://10.1234/test'],
@@ -185,14 +184,14 @@ async def test_search_documents_returns_typed_results():
         'total_hits': 1,
     }
     mcp, _, ctx = _build_mcp_with_mocks(search_return=raw)
-    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     result = await fn(ctx=ctx, query='test')
     assert isinstance(result, SearchResults)
-    assert result.index == 'documents'
     assert result.total == 1
     assert len(result.hits) == 1
     hit = result.hits[0]
     assert hit.title == 'Test Paper'
+    assert hit.source == 'documents'
     # Canonical URI prefers doi.org form
     assert hit.source_uri == 'https://doi.org/10.1234/test'
     assert hit.snippet == 'matching passage'
@@ -221,7 +220,7 @@ async def test_search_defaults_are_compact_and_paginates():
         'total_hits': 50,
     }
     mcp, client, ctx = _build_mcp_with_mocks(search_return=raw)
-    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     result = await fn(ctx=ctx, query='test', offset=10)
     assert client.search.call_args.kwargs['limit'] == 10
     assert client.search.call_args.kwargs['offset'] == 10
@@ -233,53 +232,21 @@ async def test_search_defaults_are_compact_and_paginates():
 @pytest.mark.asyncio
 async def test_search_rejects_empty_query_without_filters():
     mcp, _, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     with pytest.raises(ToolError, match='query may be empty'):
         await fn(ctx=ctx)
 
 
-# ---------------------------------------------------------------------------
-# search_social
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
-async def test_search_social_pins_index_to_social():
+async def test_search_browses_a_subreddit_with_empty_query():
     mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'machinelibrary_search_social')
-    await fn(ctx=ctx, query='breaking news')
-    kwargs = client.search.call_args.kwargs
-    assert kwargs['index_names'] == ['social']
-
-
-@pytest.mark.asyncio
-async def test_search_social_passes_uri_prefix_filter():
-    mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'machinelibrary_search_social')
-    await fn(
-        ctx=ctx,
-        query='launch',
-        filter_uri_prefixes=['@tech_news'],
-        filter_issued_after=1711929600,
-    )
-    kwargs = client.search.call_args.kwargs
-    assert kwargs['filter_uri_prefixes'] == ['@tech_news']
-    assert kwargs['filter_issued_after'] == 1711929600
-
-
-@pytest.mark.asyncio
-async def test_search_social_browse_subreddit_with_empty_query():
-    mcp, client, ctx = _build_mcp_with_mocks()
-    fn = _tool_fn(mcp, 'machinelibrary_search_social')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     await fn(
         ctx=ctx,
         filter_uri_prefixes=['https://reddit.com/r/MachineLearning/'],
         filter_issued_after=1711929600,
     )
-    args = client.search.call_args.args
-    kwargs = client.search.call_args.kwargs
-    assert args == ('',)
-    assert kwargs['index_names'] == ['social']
+    assert client.search.call_args.args == ('',)
 
 
 # ---------------------------------------------------------------------------
@@ -464,7 +431,7 @@ async def test_search_in_document_does_not_fetch_full_body_when_no_passages():
 @pytest.mark.asyncio
 async def test_insufficient_funds_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(search_side_effect=InsufficientFundsError())
-    fn = _tool_fn(mcp, 'machinelibrary_search_documents')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     with pytest.raises(ToolError) as exc:
         await fn(ctx=ctx, query='anything')
     assert 'Insufficient funds' in str(exc.value)
@@ -474,7 +441,7 @@ async def test_insufficient_funds_raises_tool_error():
 @pytest.mark.asyncio
 async def test_authentication_error_raises_tool_error():
     mcp, _, ctx = _build_mcp_with_mocks(search_side_effect=AuthenticationError())
-    fn = _tool_fn(mcp, 'machinelibrary_search_social')
+    fn = _tool_fn(mcp, 'machinelibrary_search')
     with pytest.raises(ToolError) as exc:
         await fn(ctx=ctx, query='anything')
     assert 'Authentication failed' in str(exc.value)
