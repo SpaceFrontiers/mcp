@@ -1,5 +1,7 @@
 # Machine Library MCP Server
 
+[![Machine Library MCP status on mcptry](https://mcptry.com/badge/io.github.SpaceFrontiers/mcp)](https://mcptry.com/servers/io.github.SpaceFrontiers/mcp)
+
 Official MCP server for Machine Library, the search and AI product by **Space Frontiers Company**.
 
 - **Endpoint:** `https://mcp.machinelibrary.ai` (canonical)
